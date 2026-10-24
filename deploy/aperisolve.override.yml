@@ -1,0 +1,10 @@
+# CyberCalc-owned override. Do not edit Combined_Repos/AperiSolve/compose.yml.
+# `!override` replaces the published port instead of appending 5050 next to 5000.
+services:
+  web:
+    ports: !override
+      - "127.0.0.1:5050:5000"
+    environment:
+      WEB_APP_PORT: "5050"
+      MAX_CONTENT_LENGTH: "3145728"
+      PROJECT_VERSION: "3.7.12"

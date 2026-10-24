@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { SendTarget, ToolParcel } from '@/lib/send-to';
+import SendToBar from './SendToBar';
 import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import { BitWidth, convertFromValue, ConversionState } from '@/lib/conversions';
 import {
@@ -17,11 +19,12 @@ import {
 
 interface ConversionLabProps {
   onLogHistory: (item: HistoryEntry) => void;
+  onSend?: (target: SendTarget, parcel: ToolParcel) => void;
   loadRequest?: WorkbenchLoad | null;
   resetId?: number;
 }
 
-export default function ConversionLab({ onLogHistory, loadRequest, resetId = 0 }: ConversionLabProps) {
+export default function ConversionLab({ onLogHistory, onSend, loadRequest, resetId = 0 }: ConversionLabProps) {
   const [bitWidth, setBitWidth] = useState<BitWidth>(32);
   const [activeBase, setActiveBase] = useState<'bin' | 'hex' | 'dec' | 'oct' | 'text'>('dec');
   const [inputValue, setInputValue] = useState<string>('255');
@@ -88,6 +91,14 @@ export default function ConversionLab({ onLogHistory, loadRequest, resetId = 0 }
 
   return (
     <div className="space-y-6">
+      {onSend && (
+        <SendToBar
+          from="conversion-lab"
+          parcel={{ hex: state.hex, text: state.decimalUnsigned || inputValue }}
+          onSend={onSend}
+          disabled={!state.hex && !inputValue}
+        />
+      )}
       {/* Top Configuration & Bit-Width Bar */}
       <div className="bg-[#0b101c] border border-[#1a253e] rounded-xl p-4 sm:p-5 shadow-lg">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">

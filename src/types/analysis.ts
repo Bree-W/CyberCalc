@@ -7,7 +7,8 @@ export type WorkbenchTab =
   | 'bitwise-lab'
   | 'reverse-eng'
   | 'networking'
-  | 'calculator';
+  | 'calculator'
+  | 'integrations';
 
 /** A one-shot instruction that loads data into a lab without remounting it. */
 export interface WorkbenchLoad {

@@ -5,6 +5,9 @@ import { InputFormat, ByteAnalysisResult, HistoryEntry, WorkbenchLoad } from '@/
 import { AnalystAction, buildAnalystSummary } from '@/lib/analyst';
 import { analyzeByteSequence } from '@/lib/byte-analysis';
 import ByteGrid from './ByteGrid';
+import type { ChefRecipeId } from '@/integrations/cyberchef.ts';
+import { SendTarget, ToolParcel } from '@/lib/send-to';
+import SendToBar from './SendToBar';
 import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   Binary,
@@ -21,24 +24,22 @@ const INPUT_FORMATS: InputFormat[] = ['auto', 'hex', 'binary', 'decimal', 'text'
 
 interface ByteDetectivePanelProps {
   onLogHistory: (item: HistoryEntry) => void;
-  onSendTo?: (target: 'bitwise-lab' | 'reverse-eng', hex: string) => void;
-  onApplyAnalyst?: (
-    action: Exclude<AnalystAction, 'none' | 'decode-base64'>,
-    hex: string,
-    text: string,
-  ) => void;
+  onSend?: (target: SendTarget, parcel: ToolParcel) => void;
+  onApplyAnalyst?: (action: Exclude<AnalystAction, 'none' | 'decode-base64'>, hex: string, text: string) => void;
   loadRequest?: WorkbenchLoad | null;
   resetId?: number;
   initialInput?: string;
+  onOpenInCyberChef?: (handoff: { recipe: ChefRecipeId; bytes: Uint8Array }) => void;
 }
 
 export default function ByteDetectivePanel({
   onLogHistory,
-  onSendTo,
+  onSend,
   onApplyAnalyst,
   loadRequest,
   resetId = 0,
   initialInput = '',
+  onOpenInCyberChef,
 }: ByteDetectivePanelProps) {
   const [rawInput, setRawInput] = useState<string>(initialInput);
   const [format, setFormat] = useState<InputFormat>('auto');
@@ -228,23 +229,16 @@ export default function ByteDetectivePanel({
           </div>
         )}
 
+<<<<<<< HEAD
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#162035] pt-3">
-          <button
-            disabled={analysis.totalBytes === 0}
-            onClick={() => onSendTo?.('bitwise-lab', analysis.hexString)}
-            className="flex items-center gap-1.5 border border-[#233355] bg-[#101726] px-2.5 py-1.5 text-xs font-mono text-emerald-300 disabled:opacity-40"
-          >
-            <ArrowRight className="h-3.5 w-3.5" />
-            Send to XOR
-          </button>
-          <button
-            disabled={analysis.totalBytes === 0}
-            onClick={() => onSendTo?.('reverse-eng', analysis.hexString)}
-            className="flex items-center gap-1.5 border border-[#233355] bg-[#101726] px-2.5 py-1.5 text-xs font-mono text-emerald-300 disabled:opacity-40"
-          >
-            <ArrowRight className="h-3.5 w-3.5" />
-            Send to endianness
-          </button>
+          {onSend && (
+            <SendToBar
+              from="byte-detective"
+              parcel={{ hex: analysis.hexString, text: analysis.utf8String }}
+              onSend={onSend}
+              disabled={analysis.totalBytes === 0}
+            />
+          )}
           <button
             disabled={analysis.totalBytes === 0 || analystBusy}
             onClick={askOpenModel}
@@ -255,10 +249,108 @@ export default function ByteDetectivePanel({
           <p className="w-full text-[11px] font-mono text-slate-500">
             Optional: sends a short analysis summary to DigitalOcean only when you choose this.
             {analystModel ? ` Model: ${analystModel}.` : ''}
+=======
+        {/* Quick Samples Bar */}
+        <div className="mt-3 pt-3 border-t border-[#162035] flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-mono text-slate-500 flex items-center space-x-1">
+            <Sparkles className="w-3 h-3 text-cyan-400" />
+            <span>Quick Samples:</span>
+          </span>
+          <button
+            onClick={() => loadSample('DOS/PE Executable', '4D 5A 90 00 03 00 00 00 04 00 00 00 FF FF 00 00', 'hex')}
+            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-cyan-300"
+          >
+            PE Header (4D 5A)
+          </button>
+          <button
+            onClick={() => loadSample('PNG Image', '89 50 4E 47 0D 0A 1A 0A 00 00 00 0D 49 48 44 52', 'hex')}
+            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-cyan-300"
+          >
+            PNG Header
+          </button>
+          <button
+            onClick={() => loadSample('ELF Binary', '7F 45 4C 46 02 01 01 00 00 00 00 00 00 00 00 00', 'hex')}
+            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-cyan-300"
+          >
+            ELF Header
+          </button>
+          <button
+            onClick={() => loadSample('ASCII Text', '48 65 6C 6C 6F 20 57 6F 72 6C 64 21', 'hex')}
+            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-cyan-300"
+          >
+            "Hello World!"
+          </button>
+          <button
+            onClick={() => loadSample('Shellcode NOP Sled', '90 90 90 90 90 90 31 C0 50 68 2F 2F 73 68 68 2F', 'hex')}
+            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-cyan-300"
+          >
+            NOP Sled
+          </button>
+          {onSend && (
+            <SendToBar
+              from="byte-detective"
+              parcel={{ hex: analysis.hexString, text: analysis.utf8String }}
+              onSend={onSend}
+              disabled={analysis.totalBytes === 0}
+            />
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 rounded-lg border border-[#1a253e] bg-[#070b14] p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              disabled={analysis.totalBytes === 0 || analystBusy}
+              onClick={askOpenModel}
+              className="px-3 py-1.5 rounded text-xs font-mono bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-200 disabled:opacity-40"
+            >
+              {analystBusy ? 'Asking the model…' : 'Ask the open model'}
+            </button>
+            <span className="text-[11px] font-mono text-slate-500">
+              {analystModel ? analystModel : 'openai-gpt-oss-20b'} · summary only
+            </span>
+          </div>
+          <p className="text-[11px] font-mono text-slate-500 leading-relaxed">
+            Sends entropy, signatures, and a short preview to DigitalOcean. The access key stays on the server. The labs still do the math.
+>>>>>>> origin/main
           </p>
           {analystNote && <p role="status" className="w-full text-xs font-mono text-slate-200">{analystNote}</p>}
         </div>
 
+<<<<<<< HEAD
+=======
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="font-mono text-[11px] text-slate-500">CyberChef:</span>
+          {(
+            [
+              ['from-hex', 'From Hex'],
+              ['magic', 'Magic'],
+              ['to-base64', 'To Base64'],
+            ] as const
+          ).map(([recipe, label]) => (
+            <button
+              key={recipe}
+              type="button"
+              data-testid={`chef-${recipe}`}
+              onClick={() => {
+                if (!onOpenInCyberChef) return;
+                const bytes = recipe === 'from-hex'
+                  ? new TextEncoder().encode(analysis.hexString || rawInput)
+                  : analysis.bytes;
+                onOpenInCyberChef({ recipe, bytes });
+                onLogHistory({
+                  tool: 'Byte Detective',
+                  operation: `Open in CyberChef (${label})`,
+                  inputSummary: rawInput.slice(0, 80),
+                  resultSummary: 'Opened Chef',
+                });
+              }}
+              className="rounded border border-[#202d4a] bg-[#101726] px-2 py-0.5 font-mono text-[11px] text-emerald-300"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+>>>>>>> origin/main
       </div>
 
       {/* Main Byte Inspection Workbench */}

@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { SendTarget, ToolParcel } from '@/lib/send-to';
+import SendToBar from './SendToBar';
 import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   calculateSubnet,
@@ -24,11 +26,12 @@ import {
 
 interface NetworkingLabProps {
   onLogHistory: (item: HistoryEntry) => void;
+  onSend?: (target: SendTarget, parcel: ToolParcel) => void;
   loadRequest?: WorkbenchLoad | null;
   resetId?: number;
 }
 
-export default function NetworkingLab({ onLogHistory, loadRequest, resetId = 0 }: NetworkingLabProps) {
+export default function NetworkingLab({ onLogHistory, onSend, loadRequest, resetId = 0 }: NetworkingLabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'ipv4-cidr' | 'tcp-flags' | 'ipv6'>('ipv4-cidr');
 
   // IPv4 State
@@ -115,8 +118,15 @@ export default function NetworkingLab({ onLogHistory, loadRequest, resetId = 0 }
     });
   };
 
+  const networkParcel: ToolParcel = activeSubTab === 'ipv6'
+    ? { hex: '', text: ipv6Input }
+    : activeSubTab === 'tcp-flags'
+      ? { hex: flagByte.toString(16).padStart(2, '0'), text: String(flagByte) }
+      : { hex: '', text: cidrPrefix === 24 ? ipInput : `${ipInput}/${cidrPrefix}` };
+
   return (
     <div className="space-y-6">
+      {onSend && <SendToBar from="networking" parcel={networkParcel} onSend={onSend} />}
       {/* Sub Tabs */}
       <div className="flex flex-wrap items-center gap-2 bg-[#0b101c] border border-[#1a253e] p-2 rounded-xl">
         <button

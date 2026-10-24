@@ -1,4 +1,26 @@
+# ---- AI / Cursor generated scratch (keep local; promote keepers to docs/) ----
+docs/ai-scratch/
+*.scratch.md
+PLAN.scratch.md
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
+.cursor/mcp.json          # can hold API keys; never commit
+
+# ---- Secrets ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets/
+credentials*.json
+
+# ---- Dependencies & build output ----
 node_modules/
+dist/
+build/
 .next/
 out/
 tsconfig.tsbuildinfo

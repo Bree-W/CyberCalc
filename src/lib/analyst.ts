@@ -5,6 +5,8 @@ export const ANALYST_ACTIONS = [
   'repeating-xor',
   'endianness',
   'identify-hash',
+  'open-cyberchef',
+  'inspect-image',
 ] as const;
 
 export type AnalystAction = (typeof ANALYST_ACTIONS)[number];
@@ -97,12 +99,15 @@ export function parseAnalystResponse(content: string): AnalystPlan {
 
 export const ANALYST_SYSTEM_PROMPT = [
   'You triage bytes for CyberCalc, a student forensics workbench.',
+  'Write the explanation only about cryptography: ciphers, encodings, hashes, and byte layout.',
   'Choose the next built-in lab. Do not invent keys, commands, shellcode, or plaintext.',
-  'Reply with JSON only: {"explanation":"one or two sentences","action":"none|decode-base64|single-byte-xor|repeating-xor|endianness|identify-hash"}.',
+  'Reply with JSON only: {"explanation":"one or two sentences","action":"none|decode-base64|single-byte-xor|repeating-xor|endianness|identify-hash|open-cyberchef|inspect-image"}.',
   'decode-base64: the preview looks like Base64 text.',
   'single-byte-xor: a short buffer may be English hidden under one XOR byte.',
   'repeating-xor: a repeating XOR key is the likely next step.',
   'endianness: the bytes look like a multi-byte integer or header where byte order matters.',
   'identify-hash: the preview is a hex digest or a modular-crypt hash.',
+  'open-cyberchef: CyberChef Magic is the right next bake for a cipher or encoding.',
+  'inspect-image: the bytes are a PNG, JPEG, GIF, WebP, BMP, or TIFF.',
   'none: a file signature already explains the buffer, or there is not enough data.',
 ].join(' ');
