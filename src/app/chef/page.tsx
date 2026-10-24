@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Navigation from '@/components/Navigation';
 import SendToBar from '@/components/SendToBar';
 import { useFollowSend } from '@/components/useFollowSend';
-import { CYBERCHEF_ORIGIN, CYBERCHEF_SANDBOX, cyberChefHomeUrl } from '@/integrations/index.ts';
+import { CYBERCHEF_ORIGIN, CYBERCHEF_SANDBOX, cyberChefHomeUrl, takeChefHandoff } from '@/integrations/index.ts';
 import { parcelBytes, readParcel, spacedHex, ToolParcel } from '@/lib/send-to';
 
 function bytesFromChefHash(hash: string): Uint8Array | null {
@@ -28,9 +28,15 @@ export default function ChefPage() {
   const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
+    const base = CYBERCHEF_ORIGIN.endsWith('.html') ? CYBERCHEF_ORIGIN : `${CYBERCHEF_ORIGIN}/`;
+    const handoff = takeChefHandoff();
+    if (handoff) {
+      const recipePart = handoff.recipe ? `recipe=${handoff.recipe}&` : '';
+      setSrc(`${base}#${recipePart}input=${encodeURIComponent(handoff.input)}&theme=cybercalc`);
+      return;
+    }
     const hash = window.location.hash;
-    if (hash.includes('recipe=') || hash.includes('theme=')) {
-      const base = CYBERCHEF_ORIGIN.endsWith('.html') ? CYBERCHEF_ORIGIN : `${CYBERCHEF_ORIGIN}/`;
+    if (hash.includes('recipe=') || hash.includes('input=') || hash.includes('theme=')) {
       setSrc(`${base}${hash}`);
     }
     const fromHash = bytesFromChefHash(hash);

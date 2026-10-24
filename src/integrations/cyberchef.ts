@@ -20,7 +20,8 @@ export function chefWindowPath(url: string | null): string {
   return hashAt === -1 ? '/chef' : `/chef${url.slice(hashAt)}`;
 }
 
-export type ChefRecipeId = 'from-hex' | 'to-base64' | 'magic';
+export type ChefRecipeId = 'from-hex' | 'to-base64' | 'magic' | 'raw';
+export const CHEF_HANDOFF_STORAGE_KEY = 'cybercalc-chef-handoff';
 
 export interface ChefUrl {
   url: string | null;
@@ -39,13 +40,42 @@ export function recipeFor(id: ChefRecipeId, bytes: Uint8Array): string {
     return `From_Hex('${delimiter}')`;
   }
   if (id === 'to-base64') return "To_Base64('A-Za-z0-9%2B/%3D')";
+  if (id === 'raw') return '';
   return 'Magic(3,false,false)';
+}
+
+export function storeChefHandoff(recipe: string, bytes: Uint8Array): void {
+  sessionStorage.setItem(
+    CHEF_HANDOFF_STORAGE_KEY,
+    JSON.stringify({ recipe, input: unpaddedBase64(bytes) }),
+  );
+}
+
+export function takeChefHandoff(): { recipe: string; input: string } | null {
+  const raw = sessionStorage.getItem(CHEF_HANDOFF_STORAGE_KEY);
+  if (!raw) return null;
+  sessionStorage.removeItem(CHEF_HANDOFF_STORAGE_KEY);
+  try {
+    const parsed = JSON.parse(raw) as { recipe?: unknown; input?: unknown };
+    if (typeof parsed.recipe !== 'string' || typeof parsed.input !== 'string') return null;
+    return { recipe: parsed.recipe, input: parsed.input };
+  } catch {
+    return null;
+  }
+}
+
+export function chefPathForBytes(id: ChefRecipeId, bytes: Uint8Array): string {
+  const built = buildCyberChefUrl(id, bytes);
+  if (built.url) return chefWindowPath(built.url);
+  storeChefHandoff(recipeFor(id, bytes), bytes);
+  return '/chef';
 }
 
 export function buildCyberChefUrl(id: ChefRecipeId, bytes: Uint8Array): ChefUrl {
   const recipe = recipeFor(id, bytes);
   const input = encodeURIComponent(unpaddedBase64(bytes));
-  const url = `${cyberChefBase()}#recipe=${recipe}&input=${input}&theme=${CYBERCHEF_THEME}`;
+  const recipePart = recipe ? `recipe=${recipe}&` : '';
+  const url = `${cyberChefBase()}#${recipePart}input=${input}&theme=${CYBERCHEF_THEME}`;
   if (url.length > MAX_CHEF_URL_LENGTH) {
     return {
       url: null,

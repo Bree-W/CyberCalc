@@ -27,3 +27,9 @@ tsconfig.tsbuildinfo
 .env
 .env.local
 .env*.local
+
+# ---- Local challenge captures (do not commit real/homework pcaps) ----
+HTTP2.pcap
+*.pcap
+*.pcapng
+!tests/fixtures/pcap/

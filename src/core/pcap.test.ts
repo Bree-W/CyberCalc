@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildSamplePcap, parsePcapBuffer } from '../lib/pcap-analyzer.ts';
+import { buildSamplePcap, buildSplitHttpObjectPcap, parsePcapBuffer } from '../lib/pcap-analyzer.ts';
+import { createHash } from 'node:crypto';
 
 test('pcap analyzer dissects HTTP credential leak and reconstructs TCP stream', () => {
   const bytes = buildSamplePcap('http-credential-leak.pcap');
@@ -36,4 +37,25 @@ test('pcap analyzer rejects short or non-pcap buffers gracefully', () => {
   const bad = parsePcapBuffer(new Uint8Array([1, 2, 3, 4]));
   assert.equal(bad.format, 'Unknown');
   assert.ok(bad.error);
+  assert.deepEqual(bad.httpObjects, []);
+});
+
+test('pcap analyzer exports HTTP request and response bodies', () => {
+  const res = parsePcapBuffer(buildSamplePcap('http-credential-leak.pcap'));
+  const names = res.httpObjects.map(object => object.filename);
+  assert.ok(names.includes('login'));
+  const json = res.httpObjects.find(object => object.mime === 'application/json');
+  assert.ok(json);
+  assert.match(new TextDecoder().decode(json.bytes), /flag\{wireshark_http_stream_mastery\}/);
+  assert.equal(json.md5, createHash('md5').update(json.bytes).digest('hex'));
+  assert.equal(json.sha256, createHash('sha256').update(json.bytes).digest('hex'));
+});
+
+test('pcap analyzer reassembles a split HTTP PNG object', () => {
+  const res = parsePcapBuffer(buildSplitHttpObjectPcap());
+  const png = res.httpObjects.find(object => object.filename === 'logo.png');
+  assert.ok(png);
+  assert.equal(png.mime, 'image/png');
+  assert.deepEqual([...png.bytes.slice(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  assert.equal(png.size, 33);
 });
