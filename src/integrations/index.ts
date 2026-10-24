@@ -7,7 +7,15 @@ export {
   APERISOLVE_VERSION,
 } from './aperisolve.ts';
 export type { AperiResultMeta } from './aperisolve.ts';
-export { buildCyberChefUrl, chefWindowPath, cyberChef, cyberChefHomeUrl, CYBERCHEF_VERSION } from './cyberchef.ts';
+export {
+  buildCyberChefUrl,
+  chefPathForBytes,
+  chefWindowPath,
+  cyberChef,
+  cyberChefHomeUrl,
+  CYBERCHEF_VERSION,
+  takeChefHandoff,
+} from './cyberchef.ts';
 export type { ChefRecipeId, ChefUrl } from './cyberchef.ts';
 export { CYBERCHEF_ORIGIN, CYBERCHEF_SANDBOX } from './constants.ts';
 export { dcode } from './dcode.ts';

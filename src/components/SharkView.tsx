@@ -25,7 +25,7 @@ import {
   type PcapAnalysisResult,
   type PcapSampleId,
 } from '@/lib/pcap-analyzer';
-import { buildCyberChefUrl, chefWindowPath } from '@/integrations/index.ts';
+import { chefPathForBytes } from '@/integrations/index.ts';
 
 function protocolBadgeClass(proto: ParsedPacket['protocol']): string {
   switch (proto) {
@@ -149,11 +149,24 @@ export default function SharkView() {
 
   const sendToChef = (bytesOrText: Uint8Array | string) => {
     const bytes =
-      typeof bytesOrText === 'string'
-        ? new TextEncoder().encode(bytesOrText.slice(0, 1500))
-        : bytesOrText.subarray(0, 1500);
-    const built = buildCyberChefUrl('magic', bytes);
-    router.push(chefWindowPath(built.url));
+      typeof bytesOrText === 'string' ? new TextEncoder().encode(bytesOrText) : bytesOrText;
+    router.push(chefPathForBytes('magic', bytes));
+  };
+
+  const sendObjectToChef = (bytes: Uint8Array) => {
+    router.push(chefPathForBytes('raw', bytes));
+  };
+
+  const downloadObject = (filename: string, bytes: Uint8Array, mime: string) => {
+    const blob = new Blob([bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer], {
+      type: mime || 'application/octet-stream',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const downloadCurrentPcap = () => {
@@ -339,6 +352,52 @@ export default function SharkView() {
                   <Send className="h-3 w-3" />
                   <span>Chef</span>
                 </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {analysis.httpObjects.length > 0 && (
+        <section
+          data-testid="shark-http-objects"
+          className="rounded-xl border border-[#1a253e] bg-[#0b101c] p-4"
+        >
+          <h2 className="font-mono text-xs font-bold uppercase tracking-wider text-cyan-300">
+            Exported HTTP Objects ({analysis.httpObjects.length})
+          </h2>
+          <p className="mt-1 font-mono text-[10px] text-slate-500">
+            Reassembled like Wireshark&apos;s Export HTTP Objects. Download the file or open it in Chef.
+          </p>
+          <div className="mt-3 space-y-2">
+            {analysis.httpObjects.map(object => (
+              <div
+                key={object.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#172038] bg-[#070b14] p-3 font-mono text-xs"
+              >
+                <div className="min-w-0">
+                  <p className="text-slate-100">{object.filename}</p>
+                  <p className="mt-1 break-all text-[10px] text-slate-500">
+                    {object.mime} · {object.size} B · MD5 {object.md5}
+                    {object.packet !== undefined ? ` · packet #${object.packet}` : ''}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => downloadObject(object.filename, object.bytes, object.mime)}
+                    className="rounded border border-[#22304f] px-2 py-1 text-[11px] text-slate-200 hover:border-cyan-500/40"
+                  >
+                    Download
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => sendObjectToChef(object.bytes)}
+                    className="rounded border border-cyan-500/40 bg-cyan-500/15 px-2 py-1 text-[11px] text-cyan-200 hover:bg-cyan-500/25"
+                  >
+                    Open in Chef
+                  </button>
+                </div>
               </div>
             ))}
           </div>

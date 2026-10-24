@@ -2,15 +2,21 @@
 
 import React, { useEffect, useState } from 'react';
 import Navigation from '@/components/Navigation';
-import { CYBERCHEF_ORIGIN, CYBERCHEF_SANDBOX, cyberChefHomeUrl } from '@/integrations/index.ts';
+import { CYBERCHEF_ORIGIN, CYBERCHEF_SANDBOX, cyberChefHomeUrl, takeChefHandoff } from '@/integrations/index.ts';
 
 export default function ChefPage() {
   const [src, setSrc] = useState(cyberChefHomeUrl());
 
   useEffect(() => {
+    const base = CYBERCHEF_ORIGIN.endsWith('.html') ? CYBERCHEF_ORIGIN : `${CYBERCHEF_ORIGIN}/`;
+    const handoff = takeChefHandoff();
+    if (handoff) {
+      const recipePart = handoff.recipe ? `recipe=${handoff.recipe}&` : '';
+      setSrc(`${base}#${recipePart}input=${encodeURIComponent(handoff.input)}&theme=cybercalc`);
+      return;
+    }
     const hash = window.location.hash;
-    if (hash.includes('recipe=') || hash.includes('theme=')) {
-      const base = CYBERCHEF_ORIGIN.endsWith('.html') ? CYBERCHEF_ORIGIN : `${CYBERCHEF_ORIGIN}/`;
+    if (hash.includes('recipe=') || hash.includes('input=') || hash.includes('theme=')) {
       setSrc(`${base}${hash}`);
     }
   }, []);

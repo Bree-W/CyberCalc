@@ -4,6 +4,8 @@
  * dissecting Ethernet II, ARP, IPv4, IPv6, TCP, UDP, ICMP, HTTP, and DNS.
  */
 
+import { calculateMd5 } from './hash-detective';
+
 export interface DissectedLayer {
   name: string;
   summary: string;
@@ -30,6 +32,19 @@ export interface ParsedPacket {
   ctfAlert?: string;
 }
 
+export interface HttpObject {
+  id: string;
+  filename: string;
+  mime: string;
+  size: number;
+  md5: string;
+  sha256: string;
+  packet?: number;
+  requestPacket?: number;
+  streamId?: string;
+  bytes: Uint8Array;
+}
+
 export interface PcapAnalysisResult {
   format: 'PCAP' | 'PCAPNG' | 'Unknown';
   linkType: number;
@@ -37,6 +52,7 @@ export interface PcapAnalysisResult {
   packets: ParsedPacket[];
   streams: Record<string, { id: string; protocol: 'TCP' | 'UDP'; endpoints: [string, string]; segments: { packetIndex: number; from: string; ascii: string; bytes: Uint8Array }[] }>;
   ctfFindings: { packetIndex: number; protocol: string; summary: string; extracted: string }[];
+  httpObjects: HttpObject[];
   error?: string;
 }
 
@@ -582,6 +598,7 @@ export function parsePcapBuffer(bytes: Uint8Array): PcapAnalysisResult {
       packets: [],
       streams: {},
       ctfFindings: [],
+      httpObjects: [],
       error: 'Capture buffer is smaller than a 24-byte PCAP header.',
     };
   }
@@ -611,6 +628,7 @@ export function parsePcapBuffer(bytes: Uint8Array): PcapAnalysisResult {
       packets: [],
       streams: {},
       ctfFindings: [],
+      httpObjects: [],
       error: `Unrecognized PCAP/PCAPNG magic header (0x${magicBE.toString(16).padStart(8, '0')}).`,
     };
   }
@@ -698,6 +716,197 @@ function parsePcapNg(bytes: Uint8Array): PcapAnalysisResult {
   return finalizeAnalysis('PCAPNG', linkType, linkTypeName, packets);
 }
 
+function bytesEqualAt(haystack: Uint8Array, offset: number, needle: string): boolean {
+  if (offset + needle.length > haystack.length) return false;
+  for (let i = 0; i < needle.length; i++) {
+    if (haystack[offset + i] !== needle.charCodeAt(i)) return false;
+  }
+  return true;
+}
+
+function findHttpStart(bytes: Uint8Array, from: number): number {
+  const prefixes = ['GET ', 'POST ', 'PUT ', 'HEAD ', 'DELETE ', 'OPTIONS ', 'PATCH ', 'HTTP/1.'];
+  for (let i = from; i < bytes.length; i++) {
+    if (prefixes.some(prefix => bytesEqualAt(bytes, i, prefix))) return i;
+  }
+  return -1;
+}
+
+function findHeaderEnd(bytes: Uint8Array, from: number): number {
+  for (let i = from; i + 3 < bytes.length; i++) {
+    if (bytes[i] === 0x0d && bytes[i + 1] === 0x0a && bytes[i + 2] === 0x0d && bytes[i + 3] === 0x0a) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function headerValue(headers: string, name: string): string | undefined {
+  const match = headers.match(new RegExp(`^${name}\\s*:\\s*(.+)$`, 'im'));
+  return match?.[1]?.trim();
+}
+
+function safeObjectName(uri: string): string {
+  const path = uri.split('?')[0] ?? uri;
+  const last = path.split('/').filter(Boolean).pop() || 'http-object.bin';
+  const cleaned = last.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 120);
+  return cleaned && cleaned !== '.' && cleaned !== '..' ? cleaned : 'http-object.bin';
+}
+
+function packetAtOffset(
+  segments: { packetIndex: number; bytes: Uint8Array }[],
+  offset: number,
+): number | undefined {
+  let cursor = 0;
+  for (const segment of segments) {
+    if (offset >= cursor && offset < cursor + segment.bytes.length) return segment.packetIndex;
+    cursor += segment.bytes.length;
+  }
+  return segments[0]?.packetIndex;
+}
+
+function concatBytes(chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+
+function sha256Hex(bytes: Uint8Array): string {
+  const K = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+  ];
+  const rr = (n: number, s: number) => (n >>> s) | (n << (32 - s));
+  const bitLen = bytes.length * 8;
+  const padded = new Uint8Array(((bytes.length + 9 + 63) & ~63));
+  padded.set(bytes);
+  padded[bytes.length] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(padded.length - 4, bitLen >>> 0);
+  let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a;
+  let h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+  const w = new Uint32Array(64);
+  for (let i = 0; i < padded.length; i += 64) {
+    for (let t = 0; t < 16; t++) w[t] = view.getUint32(i + t * 4);
+    for (let t = 16; t < 64; t++) {
+      const s0 = rr(w[t - 15], 7) ^ rr(w[t - 15], 18) ^ (w[t - 15] >>> 3);
+      const s1 = rr(w[t - 2], 17) ^ rr(w[t - 2], 19) ^ (w[t - 2] >>> 10);
+      w[t] = (w[t - 16] + s0 + w[t - 7] + s1) >>> 0;
+    }
+    let a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
+    for (let t = 0; t < 64; t++) {
+      const S1 = rr(e, 6) ^ rr(e, 11) ^ rr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const temp1 = (h + S1 + ch + K[t] + w[t]) >>> 0;
+      const S0 = rr(a, 2) ^ rr(a, 13) ^ rr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (S0 + maj) >>> 0;
+      h = g; g = f; f = e; e = (d + temp1) >>> 0;
+      d = c; c = b; b = a; a = (temp1 + temp2) >>> 0;
+    }
+    h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0; h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0; h5 = (h5 + f) >>> 0; h6 = (h6 + g) >>> 0; h7 = (h7 + h) >>> 0;
+  }
+  return [h0, h1, h2, h3, h4, h5, h6, h7].map(n => n.toString(16).padStart(8, '0')).join('');
+}
+
+function nextHttpStart(bytes: Uint8Array, from: number): number {
+  const prefixes = ['GET ', 'POST ', 'PUT ', 'HEAD ', 'DELETE ', 'OPTIONS ', 'PATCH '];
+  for (let i = from; i < bytes.length; i++) {
+    if (prefixes.some(prefix => bytesEqualAt(bytes, i, prefix))) return i;
+  }
+  return -1;
+}
+
+export function extractHttpObjects(
+  streams: PcapAnalysisResult['streams'],
+): HttpObject[] {
+  const objects: HttpObject[] = [];
+  let objectIndex = 0;
+
+  for (const stream of Object.values(streams)) {
+    if (stream.protocol !== 'TCP' || stream.segments.length === 0) continue;
+    const bytes = concatBytes(stream.segments.map(segment => segment.bytes));
+    let cursor = 0;
+    let pendingUri = 'http-object.bin';
+    let pendingRequestPacket: number | undefined;
+
+    while (cursor < bytes.length) {
+      const start = findHttpStart(bytes, cursor);
+      if (start < 0) break;
+      const headerEnd = findHeaderEnd(bytes, start);
+      if (headerEnd < 0) break;
+      const headerText = new TextDecoder('latin1').decode(bytes.subarray(start, headerEnd));
+      const requestLine = headerText.split(/\r\n/, 1)[0] ?? '';
+      const isResponse = requestLine.startsWith('HTTP/');
+      const requestMatch = requestLine.match(/^[A-Z]+\s+(\S+)/);
+      if (!isResponse && requestMatch) {
+        pendingUri = requestMatch[1];
+        pendingRequestPacket = packetAtOffset(stream.segments, start);
+      }
+
+      const bodyStart = headerEnd + 4;
+      const contentLength = Number(headerValue(headerText, 'Content-Length'));
+      let bodyEnd = bytes.length;
+      if (Number.isFinite(contentLength) && contentLength >= 0) {
+        bodyEnd = Math.min(bytes.length, bodyStart + contentLength);
+      } else if (isResponse) {
+        const nextReq = nextHttpStart(bytes, bodyStart);
+        if (nextReq > bodyStart) bodyEnd = nextReq;
+      } else {
+        bodyEnd = bodyStart;
+      }
+      const nextMessage = findHttpStart(bytes, bodyStart);
+      if (nextMessage >= bodyStart && nextMessage < bodyEnd) {
+        bodyEnd = nextMessage;
+      }
+
+      const body = bytes.subarray(bodyStart, bodyEnd);
+      if (isResponse && body.length > 0) {
+        const mime = headerValue(headerText, 'Content-Type')?.split(';')[0]?.trim() || 'application/octet-stream';
+        objects.push({
+          id: `${stream.id}-${objectIndex++}`,
+          filename: safeObjectName(pendingUri),
+          mime,
+          size: body.length,
+          md5: calculateMd5(body),
+          sha256: sha256Hex(body),
+          packet: packetAtOffset(stream.segments, start),
+          requestPacket: pendingRequestPacket,
+          streamId: stream.id,
+          bytes: body.slice(),
+        });
+      } else if (!isResponse && body.length > 0) {
+        objects.push({
+          id: `${stream.id}-${objectIndex++}`,
+          filename: safeObjectName(pendingUri),
+          mime: headerValue(headerText, 'Content-Type')?.split(';')[0]?.trim() || 'application/octet-stream',
+          size: body.length,
+          md5: calculateMd5(body),
+          sha256: sha256Hex(body),
+          packet: packetAtOffset(stream.segments, start),
+          requestPacket: packetAtOffset(stream.segments, start),
+          streamId: stream.id,
+          bytes: body.slice(),
+        });
+      }
+      cursor = Math.max(bodyEnd, headerEnd + 4);
+    }
+  }
+  return objects;
+}
+
 function finalizeAnalysis(
   format: 'PCAP' | 'PCAPNG',
   linkType: number,
@@ -743,6 +952,7 @@ function finalizeAnalysis(
     packets,
     streams,
     ctfFindings,
+    httpObjects: extractHttpObjects(streams),
   };
 }
 
@@ -795,8 +1005,9 @@ function buildTcpSegment(
   ack: number,
   flags: number,
   payloadText = '',
+  payloadBytes?: Uint8Array,
 ): Uint8Array {
-  const payload = new TextEncoder().encode(payloadText);
+  const payload = payloadBytes ?? new TextEncoder().encode(payloadText);
   const seg: number[] = [];
   writeU16BEBuf(seg, srcPort);
   writeU16BEBuf(seg, dstPort);
@@ -968,11 +1179,33 @@ export function buildSamplePcap(id: PcapSampleId): Uint8Array {
     ]);
   }
 
-  // icmp-covert-tunnel.pcap
   return wrapFramesInPcap([
     { tsOffsetMs: 0, data: buildEthernetIpv4Frame(client, server, 1, buildIcmpEcho(8, 1, 'PING-BEACON:Part1=flag{icmp_')) },
     { tsOffsetMs: 15, data: buildEthernetIpv4Frame(server, client, 1, buildIcmpEcho(0, 1, 'PONG-ACK-1')) },
     { tsOffsetMs: 100, data: buildEthernetIpv4Frame(client, server, 1, buildIcmpEcho(8, 2, 'PING-BEACON:Part2=covert_ping_tunnel}')) },
     { tsOffsetMs: 118, data: buildEthernetIpv4Frame(server, client, 1, buildIcmpEcho(0, 2, 'PONG-ACK-2:flag{icmp_covert_ping_tunnel}')) },
+  ]);
+}
+
+export function buildSplitHttpObjectPcap(): Uint8Array {
+  const client: [number, number, number, number] = [10, 10, 14, 25];
+  const server: [number, number, number, number] = [192, 168, 56, 80];
+  const req = 'GET /images/layout/logo.png HTTP/1.0\r\nHost: example.test\r\n\r\n';
+  const png = Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+    0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde,
+  ]);
+  const header = new TextEncoder().encode(
+    `HTTP/1.1 200 OK\r\nServer: nginx/0.8.53\r\nContent-Type: image/png\r\nContent-Length: ${png.length}\r\n\r\n`,
+  );
+  const first = new Uint8Array(header.length + 8);
+  first.set(header);
+  first.set(png.subarray(0, 8), header.length);
+  const second = png.subarray(8);
+  return wrapFramesInPcap([
+    { tsOffsetMs: 0, data: buildEthernetIpv4Frame(client, server, 6, buildTcpSegment(51422, 80, 1000, 0, 0x18, req)) },
+    { tsOffsetMs: 10, data: buildEthernetIpv4Frame(server, client, 6, buildTcpSegment(80, 51422, 2000, 1000 + req.length, 0x18, '', first)) },
+    { tsOffsetMs: 20, data: buildEthernetIpv4Frame(server, client, 6, buildTcpSegment(80, 51422, 2000 + first.length, 1000 + req.length, 0x18, '', second)) },
   ]);
 }

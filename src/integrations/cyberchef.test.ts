@@ -34,6 +34,10 @@ test('cyberchef hash uses documented recipes and encodes plus signs', () => {
   const magic = buildCyberChefUrl('magic', new TextEncoder().encode('hi'));
   assert.match(magic.url ?? '', /recipe=Magic\(3,false,false\)/);
 
+  const raw = buildCyberChefUrl('raw', new TextEncoder().encode('hi'));
+  assert.match(raw.url ?? '', /#input=/);
+  assert.equal((raw.url ?? '').includes('recipe='), false);
+
   const plus = buildCyberChefUrl('to-base64', Uint8Array.of(0xfb));
   assert.ok(plus.url);
   assert.match(plus.url ?? '', /recipe=To_Base64\('A-Za-z0-9%2B\/%3D'\)/);
