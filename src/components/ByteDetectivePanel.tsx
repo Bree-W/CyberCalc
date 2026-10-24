@@ -16,7 +16,6 @@ import {
   Upload,
   AlertTriangle,
   Activity,
-  ArrowRight,
 } from 'lucide-react';
 
 const MAX_FILE_BYTES = 64 * 1024;
@@ -229,7 +228,6 @@ export default function ByteDetectivePanel({
           </div>
         )}
 
-<<<<<<< HEAD
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#162035] pt-3">
           {onSend && (
             <SendToBar
@@ -249,75 +247,10 @@ export default function ByteDetectivePanel({
           <p className="w-full text-[11px] font-mono text-slate-500">
             Optional: sends a short analysis summary to DigitalOcean only when you choose this.
             {analystModel ? ` Model: ${analystModel}.` : ''}
-=======
-        {/* Quick Samples Bar */}
-        <div className="mt-3 pt-3 border-t border-[#162035] flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-mono text-slate-500 flex items-center space-x-1">
-            <Sparkles className="w-3 h-3 text-cyan-400" />
-            <span>Quick Samples:</span>
-          </span>
-          <button
-            onClick={() => loadSample('DOS/PE Executable', '4D 5A 90 00 03 00 00 00 04 00 00 00 FF FF 00 00', 'hex')}
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-cyan-300"
-          >
-            PE Header (4D 5A)
-          </button>
-          <button
-            onClick={() => loadSample('PNG Image', '89 50 4E 47 0D 0A 1A 0A 00 00 00 0D 49 48 44 52', 'hex')}
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-cyan-300"
-          >
-            PNG Header
-          </button>
-          <button
-            onClick={() => loadSample('ELF Binary', '7F 45 4C 46 02 01 01 00 00 00 00 00 00 00 00 00', 'hex')}
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-cyan-300"
-          >
-            ELF Header
-          </button>
-          <button
-            onClick={() => loadSample('ASCII Text', '48 65 6C 6C 6F 20 57 6F 72 6C 64 21', 'hex')}
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-cyan-300"
-          >
-            "Hello World!"
-          </button>
-          <button
-            onClick={() => loadSample('Shellcode NOP Sled', '90 90 90 90 90 90 31 C0 50 68 2F 2F 73 68 68 2F', 'hex')}
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-cyan-300"
-          >
-            NOP Sled
-          </button>
-          {onSend && (
-            <SendToBar
-              from="byte-detective"
-              parcel={{ hex: analysis.hexString, text: analysis.utf8String }}
-              onSend={onSend}
-              disabled={analysis.totalBytes === 0}
-            />
-          )}
-        </div>
-
-        <div className="mt-3 flex flex-col gap-2 rounded-lg border border-[#1a253e] bg-[#070b14] p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <button
-              disabled={analysis.totalBytes === 0 || analystBusy}
-              onClick={askOpenModel}
-              className="px-3 py-1.5 rounded text-xs font-mono bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-200 disabled:opacity-40"
-            >
-              {analystBusy ? 'Asking the model…' : 'Ask the open model'}
-            </button>
-            <span className="text-[11px] font-mono text-slate-500">
-              {analystModel ? analystModel : 'openai-gpt-oss-20b'} · summary only
-            </span>
-          </div>
-          <p className="text-[11px] font-mono text-slate-500 leading-relaxed">
-            Sends entropy, signatures, and a short preview to DigitalOcean. The access key stays on the server. The labs still do the math.
->>>>>>> origin/main
           </p>
           {analystNote && <p role="status" className="w-full text-xs font-mono text-slate-200">{analystNote}</p>}
         </div>
 
-<<<<<<< HEAD
-=======
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="font-mono text-[11px] text-slate-500">CyberChef:</span>
           {(
@@ -350,7 +283,7 @@ export default function ByteDetectivePanel({
             </button>
           ))}
         </div>
->>>>>>> origin/main
+
       </div>
 
       {/* Main Byte Inspection Workbench */}
