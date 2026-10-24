@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   BitwiseOp,
   computeBitwiseOperation,
@@ -22,16 +24,12 @@ import {
 } from 'lucide-react';
 
 interface BitwiseLabProps {
-  onLogHistory: (item: {
-    tool: 'Bitwise Operations';
-    operation: string;
-    inputSummary: string;
-    params?: string;
-    resultSummary: string;
-  }) => void;
+  onLogHistory: (item: HistoryEntry) => void;
+  loadRequest?: WorkbenchLoad | null;
+  resetId?: number;
 }
 
-export default function BitwiseLab({ onLogHistory }: BitwiseLabProps) {
+export default function BitwiseLab({ onLogHistory, loadRequest, resetId = 0 }: BitwiseLabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'bitwise' | 'repeating-xor' | 'single-key-bruteforce'>('repeating-xor');
 
   // Single Operation State
@@ -50,6 +48,34 @@ export default function BitwiseLab({ onLogHistory }: BitwiseLabProps) {
   const [bruteForceInput, setBruteForceInput] = useState<string>('1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736');
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  useWorkbenchLoad(loadRequest, 'bitwise-lab', payload => {
+    if (payload.subtab === 'repeating-xor' || payload.subtab === 'single-key-bruteforce' || payload.subtab === 'bitwise') {
+      setActiveSubTab(payload.subtab);
+    }
+    if (payload.data != null) {
+      setXorDataInput(payload.data);
+      setXorDataType('hex');
+    }
+    if (payload.key != null) {
+      setXorKeyInput(payload.key);
+      setXorKeyType('hex');
+    }
+    if (payload.brute != null) {
+      setBruteForceInput(payload.brute);
+      setActiveSubTab('single-key-bruteforce');
+    }
+  });
+
+  useWorkbenchReset(resetId, () => {
+    setXorDataInput('41 42 43 44');
+    setXorKeyInput('20');
+    setXorDataType('hex');
+    setXorKeyType('hex');
+    setBruteForceInput('1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736');
+    setOperandAStr('0x41');
+    setOperandBStr('0x20');
+  });
 
   // Helper parse BigInt from string
   const parseVal = (str: string): bigint => {
@@ -104,6 +130,8 @@ export default function BitwiseLab({ onLogHistory }: BitwiseLabProps) {
       inputSummary: '41 42 43 44',
       params: 'Key: 0x20',
       resultSummary: '61 62 63 64 ("abcd")',
+      restoreTab: 'bitwise-lab',
+      restore: { subtab: 'repeating-xor', data: '41 42 43 44', key: '20' },
     });
   };
 

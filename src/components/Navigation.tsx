@@ -14,6 +14,7 @@ import {
   ChefHat,
   Layers,
 } from 'lucide-react';
+import { WorkbenchTab } from '@/types/analysis';
 
 export type ActiveTab =
   | 'byte-detective'
@@ -39,6 +40,7 @@ const TAB_IDS: ActiveTab[] = [
 export function isActiveTab(value: string): value is ActiveTab {
   return (TAB_IDS as string[]).includes(value);
 }
+export type ActiveTab = WorkbenchTab;
 
 interface NavigationProps {
   activeTab: ActiveTab | 'chef' | 'aperi';

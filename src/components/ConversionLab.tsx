@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import { BitWidth, convertFromValue, ConversionState } from '@/lib/conversions';
 import {
   ArrowLeftRight,
@@ -14,19 +16,31 @@ import {
 } from 'lucide-react';
 
 interface ConversionLabProps {
-  onLogHistory: (item: {
-    tool: 'Conversion Lab';
-    operation: string;
-    inputSummary: string;
-    params?: string;
-    resultSummary: string;
-  }) => void;
+  onLogHistory: (item: HistoryEntry) => void;
+  loadRequest?: WorkbenchLoad | null;
+  resetId?: number;
 }
 
-export default function ConversionLab({ onLogHistory }: ConversionLabProps) {
+export default function ConversionLab({ onLogHistory, loadRequest, resetId = 0 }: ConversionLabProps) {
   const [bitWidth, setBitWidth] = useState<BitWidth>(32);
   const [activeBase, setActiveBase] = useState<'bin' | 'hex' | 'dec' | 'oct' | 'text'>('dec');
   const [inputValue, setInputValue] = useState<string>('255');
+
+  useWorkbenchLoad(loadRequest, 'conversion-lab', payload => {
+    if (payload.input != null) setInputValue(payload.input);
+    if (payload.base === 'bin' || payload.base === 'hex' || payload.base === 'dec' || payload.base === 'oct' || payload.base === 'text') {
+      setActiveBase(payload.base);
+    }
+    if (payload.width === '8' || payload.width === '16' || payload.width === '32' || payload.width === '64') {
+      setBitWidth(Number(payload.width) as BitWidth);
+    }
+  });
+
+  useWorkbenchReset(resetId, () => {
+    setBitWidth(32);
+    setActiveBase('dec');
+    setInputValue('255');
+  });
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const state: ConversionState = React.useMemo(() => {
@@ -57,6 +71,8 @@ export default function ConversionLab({ onLogHistory }: ConversionLabProps) {
         inputSummary: `Bit ${bitPosition} -> ${bitArr[idx]}`,
         params: `${bitWidth}-bit mode`,
         resultSummary: `Value: ${newBin}`,
+        restoreTab: 'conversion-lab',
+        restore: { input: newBin, base: 'bin', width: String(bitWidth) },
       });
     }
   };

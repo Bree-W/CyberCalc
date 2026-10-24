@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   analyzeEndianness,
   compareByteSequences,
@@ -22,17 +24,15 @@ import {
 } from 'lucide-react';
 
 interface ReverseEngineeringLabProps {
-  onLogHistory: (item: {
-    tool: 'Reverse Engineering';
-    operation: string;
-    inputSummary: string;
-    params?: string;
-    resultSummary: string;
-  }) => void;
+  onLogHistory: (item: HistoryEntry) => void;
+  loadRequest?: WorkbenchLoad | null;
+  resetId?: number;
 }
 
 export default function ReverseEngineeringLab({
   onLogHistory,
+  loadRequest,
+  resetId = 0,
 }: ReverseEngineeringLabProps) {
   const [activeTab, setActiveTab] = useState<'endianness' | 'diff' | 'signatures'>('endianness');
 
@@ -47,6 +47,21 @@ export default function ReverseEngineeringLab({
   const [signatureSearch, setSignatureSearch] = useState<string>('');
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  useWorkbenchLoad(loadRequest, 'reverse-eng', payload => {
+    if (payload.subtab === 'endianness' || payload.subtab === 'diff' || payload.subtab === 'signatures') {
+      setActiveTab(payload.subtab);
+    }
+    if (payload.input != null) setEndianInput(payload.input);
+    if (payload.inputA != null) setDiffInputA(payload.inputA);
+    if (payload.inputB != null) setDiffInputB(payload.inputB);
+  });
+
+  useWorkbenchReset(resetId, () => {
+    setEndianInput('01 02 03 04');
+    setDiffInputA('4D 5A 90 00 03 00 00 00 04 00 00 00');
+    setDiffInputB('4D 5A 90 00 03 00 00 00 08 00 00 00');
+  });
 
   // Compute Endianness
   const endianAnalysis: EndianAnalysisResult = React.useMemo(() => {
@@ -75,6 +90,8 @@ export default function ReverseEngineeringLab({
       operation: 'Load Spec Example: 01 02 03 04',
       inputSummary: '01 02 03 04',
       resultSummary: 'Big-Endian: 16,909,060 vs Little-Endian: 67,305,985',
+      restoreTab: 'reverse-eng',
+      restore: { subtab: 'endianness', input: '01 02 03 04' },
     });
   };
 

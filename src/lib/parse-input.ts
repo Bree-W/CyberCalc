@@ -1,4 +1,4 @@
-import { InputFormat } from '../types/analysis';
+import type { InputFormat } from '../types/analysis';
 
 export interface ParseResult {
   bytes: Uint8Array;
@@ -59,11 +59,11 @@ function parseHex(input: string): ParseResult {
     return { bytes: new Uint8Array(0), formatDetected: 'hex' };
   }
 
-  // If odd length, warn and pad leading 0 or tailing 0
+  // Odd length: pad the tail so earlier bytes keep their alignment.
   let warning: string | undefined;
   if (cleaned.length % 2 !== 0) {
-    warning = 'Odd number of hex characters detected. An initial 0 was prepended for alignment.';
-    cleaned = '0' + cleaned;
+    warning = 'Odd number of hex characters. A trailing 0 was appended so the last nibble stays in the final byte.';
+    cleaned = cleaned + '0';
   }
 
   if (!/^[0-9a-fA-F]+$/.test(cleaned)) {

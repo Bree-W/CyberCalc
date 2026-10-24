@@ -1,4 +1,4 @@
-import { HashPrediction } from '../types/analysis';
+import type { HashPrediction } from '../types/analysis';
 
 export interface HashDetectionResult {
   rawInput: string;
@@ -7,7 +7,8 @@ export interface HashDetectionResult {
   detectedCharset: 'hex' | 'base64' | 'crypt' | 'ascii' | 'unknown';
   primaryMatch: HashPrediction | null;
   candidates: HashPrediction[];
-  entropy: number;
+  /** Distinct-character spread. This is not Shannon entropy. */
+  charsetSpread: number;
   notes: string[];
 }
 
@@ -24,7 +25,7 @@ export function detectHashType(input: string): HashDetectionResult {
       detectedCharset: 'unknown',
       primaryMatch: null,
       candidates: [],
-      entropy: 0,
+      charsetSpread: 0,
       notes: ['No hash provided. Enter a hash string to identify its algorithm.'],
     };
   }
@@ -70,7 +71,7 @@ export function detectHashType(input: string): HashDetectionResult {
       charset: 'Modular Crypt Format ($argon2...)',
       description: 'Memory-hard password hashing function, winner of the Password Hashing Competition (PHC) 2015. Highly resistant to GPU/ASIC cracking.',
       securityStatus: 'Secure',
-      hashcatMode: '-m 33400',
+      hashcatMode: '-m 34000',
       johnFormat: 'argon2',
       sampleUse: 'Modern password storage, KeePassXC, 1Password, Bitwarden',
     });
@@ -146,9 +147,8 @@ export function detectHashType(input: string): HashDetectionResult {
       bitLength: trimmed.length * 4,
       charLength: trimmed.length,
       charset: 'Hex digits with 2-digit index prefix',
-      description: 'Reversible Vigenère-like XOR obfuscation used in Cisco IOS running-config. Trivial to decode without a key.',
+      description: 'Reversible Vigenère-like XOR obfuscation used in Cisco IOS running-config. Trivial to decode without a key. Hashcat has no mode for Type 7 (mode 5700 is Cisco IOS type 4 / SHA-256). John the Ripper format is cisco7.',
       securityStatus: 'Broken',
-      hashcatMode: '-m 5700',
       johnFormat: 'cisco7',
       sampleUse: 'Cisco IOS router and switch configuration files',
     });
@@ -289,9 +289,8 @@ export function detectHashType(input: string): HashDetectionResult {
           bitLength: 128,
           charLength: 32,
           charset: 'Hexadecimal (128-bit)',
-          description: '128-bit European cryptographic hash designed as an MD4/MD5 drop-in replacement.',
+          description: '128-bit European cryptographic hash designed as an MD4/MD5 drop-in replacement. Hashcat has no RIPEMD-128 mode; -m 6000 is RIPEMD-160.',
           securityStatus: 'Legacy',
-          hashcatMode: '-m 6000',
           sampleUse: 'European crypto frameworks',
         },
         {
@@ -393,7 +392,7 @@ export function detectHashType(input: string): HashDetectionResult {
         {
           name: 'SHA-256',
           category: 'Standard Cryptographic',
-          confidence: 70,
+          confidence: 58,
           bitLength: 256,
           charLength: 64,
           charset: 'Hexadecimal (256-bit)',
@@ -404,34 +403,59 @@ export function detectHashType(input: string): HashDetectionResult {
           sampleUse: 'TLS/SSL certificates, Bitcoin proof-of-work, Docker image digests, code signatures',
         },
         {
-          name: 'Keccak-256 / SHA3-256',
+          name: 'SHA3-256',
           category: 'Standard Cryptographic',
-          confidence: 18,
+          confidence: 16,
           bitLength: 256,
           charLength: 64,
           charset: 'Hexadecimal (256-bit)',
-          description: 'Sponge function designed by Guido Bertoni et al. The original Keccak-256 is the core hash of Ethereum.',
+          description: 'NIST SHA-3 sponge (FIPS 202). Different padding from the original Keccak-256 used by Ethereum, so the digests do not match.',
           securityStatus: 'Secure',
-          hashcatMode: '-m 5000 / -m 17800',
+          hashcatMode: '-m 17400',
+          johnFormat: 'sha3-256',
+          sampleUse: 'NIST SHA-3 deployments and modern protocol digests',
+        },
+        {
+          name: 'Keccak-256',
+          category: 'Standard Cryptographic',
+          confidence: 12,
+          bitLength: 256,
+          charLength: 64,
+          charset: 'Hexadecimal (256-bit)',
+          description: 'Original Keccak sponge, not NIST SHA-3. This is the 256-bit hash used by Ethereum.',
+          securityStatus: 'Secure',
+          hashcatMode: '-m 17800',
           johnFormat: 'keccak-256',
           sampleUse: 'Ethereum smart contracts, EVM function selectors (bytes4), address creation',
         },
         {
-          name: 'BLAKE2s-256 / BLAKE2b-256',
+          name: 'BLAKE2s-256',
           category: 'Standard Cryptographic',
-          confidence: 8,
+          confidence: 7,
           bitLength: 256,
           charLength: 64,
           charset: 'Hexadecimal (256-bit)',
-          description: 'Extremely fast cryptographic hash function based on ChaCha cipher core, faster than MD5 on 64-bit architectures.',
+          description: '32-bit-word BLAKE2 variant producing a 256-bit digest. Hashcat mode 600 is BLAKE2b-512, not this hash.',
           securityStatus: 'Secure',
-          hashcatMode: '-m 600',
-          sampleUse: 'WireGuard VPN, Argon2 core, Linux kernel crypto',
+          hashcatMode: '-m 31000',
+          sampleUse: 'Embedded and 32-bit platforms that want a BLAKE2 digest',
+        },
+        {
+          name: 'BLAKE2b-256',
+          category: 'Standard Cryptographic',
+          confidence: 4,
+          bitLength: 256,
+          charLength: 64,
+          charset: 'Hexadecimal (256-bit)',
+          description: 'BLAKE2b truncated to 256 bits. The full 512-bit BLAKE2b digest is Hashcat mode 600.',
+          securityStatus: 'Secure',
+          hashcatMode: '-m 34800',
+          sampleUse: 'Argon2 core and libraries that request a 256-bit BLAKE2b digest',
         },
         {
           name: 'GOST R 34.11-94',
           category: 'Legacy / Broken',
-          confidence: 4,
+          confidence: 3,
           bitLength: 256,
           charLength: 64,
           charset: 'Hexadecimal (256-bit)',
@@ -548,7 +572,7 @@ export function detectHashType(input: string): HashDetectionResult {
     detectedCharset,
     primaryMatch: candidates.length > 0 ? candidates[0] : null,
     candidates,
-    entropy: Number((Math.log2(new Set(trimmed).size || 1) * (trimmed.length / 8)).toFixed(2)),
+    charsetSpread: Number((Math.log2(new Set(trimmed).size || 1) * (trimmed.length / 8)).toFixed(2)),
     notes,
   };
 }

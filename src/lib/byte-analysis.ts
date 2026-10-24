@@ -1,4 +1,4 @@
-import { ByteAnalysisResult, ByteInfo, DetectedPattern, InputFormat } from '../types/analysis';
+import type { ByteAnalysisResult, ByteInfo, DetectedPattern, InputFormat } from '../types/analysis';
 import { parseRawInput } from './parse-input';
 import { detectSignatures } from './signatures';
 
@@ -209,5 +209,37 @@ function detectPatterns(bytes: Uint8Array, entropy: number): DetectedPattern[] {
     });
   }
 
+  const base64 = detectBase64Candidate(bytes);
+  if (base64) patterns.push(base64);
+
   return patterns;
+}
+
+function detectBase64Candidate(bytes: Uint8Array): DetectedPattern | null {
+  if (bytes.length < 16 || bytes.length % 4 !== 0) return null;
+  let text = '';
+  let hasMarker = false;
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    const isAlphaNum =
+      (b >= 0x41 && b <= 0x5a) ||
+      (b >= 0x61 && b <= 0x7a) ||
+      (b >= 0x30 && b <= 0x39);
+    const isMarker = b === 0x2b || b === 0x2f || b === 0x3d;
+    if (!isAlphaNum && !isMarker) return null;
+    if (isMarker) hasMarker = true;
+    text += String.fromCharCode(b);
+  }
+  // Hex is a subset of the Base64 alphabet. Require +, /, or = so plain hex is not flagged.
+  if (!hasMarker) return null;
+  try {
+    atob(text);
+  } catch {
+    return null;
+  }
+  return {
+    type: 'base64_candidate',
+    title: 'Base64 Text Candidate',
+    description: 'The buffer is ASCII in the Base64 alphabet and includes +, /, or = padding. Decode it with the Base64 input format.',
+  };
 }
