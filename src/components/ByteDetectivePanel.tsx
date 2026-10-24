@@ -6,6 +6,8 @@ import { AnalystAction, buildAnalystSummary } from '@/lib/analyst';
 import { analyzeByteSequence } from '@/lib/byte-analysis';
 import ByteGrid from './ByteGrid';
 import type { ChefRecipeId } from '@/integrations/cyberchef.ts';
+import { SendTarget, ToolParcel } from '@/lib/send-to';
+import SendToBar from './SendToBar';
 import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   Binary,
@@ -25,7 +27,7 @@ const INPUT_FORMATS: InputFormat[] = ['auto', 'hex', 'binary', 'decimal', 'text'
 
 interface ByteDetectivePanelProps {
   onLogHistory: (item: HistoryEntry) => void;
-  onSendTo?: (target: 'bitwise-lab' | 'reverse-eng', hex: string) => void;
+  onSend?: (target: SendTarget, parcel: ToolParcel) => void;
   onApplyAnalyst?: (action: Exclude<AnalystAction, 'none' | 'decode-base64'>, hex: string, text: string) => void;
   loadRequest?: WorkbenchLoad | null;
   resetId?: number;
@@ -35,7 +37,7 @@ interface ByteDetectivePanelProps {
 
 export default function ByteDetectivePanel({
   onLogHistory,
-  onSendTo,
+  onSend,
   onApplyAnalyst,
   loadRequest,
   resetId = 0,
@@ -312,20 +314,14 @@ export default function ByteDetectivePanel({
           >
             NOP Sled
           </button>
-          <button
-            disabled={analysis.totalBytes === 0}
-            onClick={() => onSendTo?.('bitwise-lab', analysis.hexString)}
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-emerald-300 disabled:opacity-40"
-          >
-            Send to XOR
-          </button>
-          <button
-            disabled={analysis.totalBytes === 0}
-            onClick={() => onSendTo?.('reverse-eng', analysis.hexString)}
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-emerald-300 disabled:opacity-40"
-          >
-            Send to endianness
-          </button>
+          {onSend && (
+            <SendToBar
+              from="byte-detective"
+              parcel={{ hex: analysis.hexString, text: analysis.utf8String }}
+              onSend={onSend}
+              disabled={analysis.totalBytes === 0}
+            />
+          )}
         </div>
 
         <div className="mt-3 flex flex-col gap-2 rounded-lg border border-[#1a253e] bg-[#070b14] p-3">
@@ -372,7 +368,7 @@ export default function ByteDetectivePanel({
                   tool: 'Byte Detective',
                   operation: `Open in CyberChef (${label})`,
                   inputSummary: rawInput.slice(0, 80),
-                  resultSummary: 'Opened the Integrations tab',
+                  resultSummary: 'Opened Chef',
                 });
               }}
               className="rounded border border-[#202d4a] bg-[#101726] px-2 py-0.5 font-mono text-[11px] text-emerald-300"

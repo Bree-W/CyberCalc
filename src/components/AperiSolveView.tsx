@@ -27,6 +27,10 @@ import {
   submitAperiSample,
   type AperiResultMeta,
 } from '@/integrations/index.ts';
+import { detectAllowedImage, filenameForImage } from '@/integrations/magic-bytes.ts';
+import { spacedHex, takeAperiBytes } from '@/lib/send-to';
+import SendToBar from './SendToBar';
+import { useFollowSend } from './useFollowSend';
 
 const SAMPLE_CARDS = [
   {
@@ -156,6 +160,9 @@ function generateDecomposerAndRemaps(img: HTMLImageElement): {
 
 export default function AperiSolveView() {
   const router = useRouter();
+  const follow = useFollowSend();
+  const [loadedBytes, setLoadedBytes] = useState<Uint8Array | null>(null);
+  const [sendNote, setSendNote] = useState<string | null>(null);
   const [selectedSample, setSelectedSample] = useState<string>('example1.png');
   const [password, setPassword] = useState('');
   const [deep, setDeep] = useState(false);
@@ -176,6 +183,12 @@ export default function AperiSolveView() {
     setBusy(true);
     setError(null);
     setPreviewUrl(`/samples/aperisolve/${name}`);
+    try {
+      const sampleResponse = await fetch(`/samples/aperisolve/${name}`);
+      if (sampleResponse.ok) setLoadedBytes(new Uint8Array(await sampleResponse.arrayBuffer()));
+    } catch {
+      setLoadedBytes(null);
+    }
     const sub = await submitAperiSample(name, { password: password || undefined, deep });
     if (!sub.ok || !sub.submissionHash) {
       setBusy(false);
@@ -197,6 +210,7 @@ export default function AperiSolveView() {
   const runUploadedFile = async (file: File) => {
     setBusy(true);
     setError(null);
+    setLoadedBytes(new Uint8Array(await file.arrayBuffer()));
     const localUrl = URL.createObjectURL(file);
     setPreviewUrl(localUrl);
     const sub = await aperiSolve.submit(file, { password: password || undefined, deep });
@@ -217,8 +231,13 @@ export default function AperiSolveView() {
     }
   };
 
-  // Run example1.png automatically on initial mount so the page is immediately populated
   useEffect(() => {
+    const incoming = takeAperiBytes();
+    const kind = incoming ? detectAllowedImage(incoming) : null;
+    if (incoming && kind) {
+      void runUploadedFile(new File([incoming], filenameForImage('handoff', kind)));
+      return;
+    }
     void runSampleByName('example1.png');
   }, []);
 
@@ -257,6 +276,15 @@ export default function AperiSolveView() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="flex flex-wrap items-center gap-2">
+        <SendToBar
+          from="aperi"
+          parcel={{ hex: loadedBytes ? spacedHex(loadedBytes) : '', text: meta?.filename ?? '' }}
+          disabled={!loadedBytes}
+          onSend={(target, parcel) => setSendNote(follow(target, parcel))}
+        />
+        {sendNote && <span className="font-mono text-[11px] text-slate-400">{sendNote}</span>}
+      </div>
       {/* Header Banner */}
       <section className="rounded-xl border border-cyan-500/30 bg-[#0a101d] p-5 shadow-neon-cyan">
         <div className="flex flex-wrap items-center justify-between gap-4">

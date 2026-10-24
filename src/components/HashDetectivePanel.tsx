@@ -9,6 +9,8 @@ import {
   HashDetectionResult,
 } from '@/lib/hash-detective';
 import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { SendTarget, ToolParcel } from '@/lib/send-to';
+import SendToBar from './SendToBar';
 import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   Hash,
@@ -26,6 +28,7 @@ import {
 
 interface HashDetectivePanelProps {
   onLogHistory: (item: HistoryEntry) => void;
+  onSend?: (target: SendTarget, parcel: ToolParcel) => void;
   loadRequest?: WorkbenchLoad | null;
   resetId?: number;
   initialHash?: string;
@@ -33,6 +36,7 @@ interface HashDetectivePanelProps {
 
 export default function HashDetectivePanel({
   onLogHistory,
+  onSend,
   loadRequest,
   resetId = 0,
   initialHash = '5d41402abc4b2a76b9719d911017c592',
@@ -103,6 +107,7 @@ export default function HashDetectivePanel({
 
   return (
     <div className="space-y-6">
+      {onSend && <SendToBar from="hash-detective" parcel={{ hex: '', text: hashInput || generatorText }} onSend={onSend} disabled={!hashInput && !generatorText} />}
       {/* Top Input & Identification Card */}
       <div className="bg-[#0b101c] border border-[#1a253e] rounded-xl p-4 sm:p-5 shadow-lg">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">

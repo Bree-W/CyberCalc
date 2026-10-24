@@ -10,6 +10,7 @@ import { detectHashType } from './src/lib/hash-detective.ts';
 import { detectSignatures } from './src/lib/signatures.ts';
 import { analyzeByteSequence } from './src/lib/byte-analysis.ts';
 import { parseAnalystResponse, sanitizeAnalystSummary } from './src/lib/analyst.ts';
+import { routeParcel } from './src/lib/send-to.ts';
 
 test('Standard Calculator evaluates the real expression parser', () => {
   assert.equal(evaluateExpression('2 + 3 * 4').result, 14);
@@ -118,6 +119,19 @@ test('Open-model replies are limited to a known lab choice', () => {
 
   const unknown = parseAnalystResponse('{"explanation":"Try something else.","action":"crack-aes"}');
   assert.equal(unknown.action, 'none');
+  const chef = parseAnalystResponse('{"explanation":"Bake this in CyberChef.","action":"open-cyberchef"}');
+  assert.equal(chef.action, 'open-cyberchef');
+
+  const xor = routeParcel('bitwise-lab', { hex: '41 42', text: 'AB' });
+  assert.equal(xor.kind, 'load');
+  if (xor.kind === 'load') assert.equal(xor.payload.subtab, 'repeating-xor');
+  const image = routeParcel('aperi', { hex: '89 50 4E 47 0D 0A 1A 0A', text: '' });
+  assert.equal(image.kind, 'aperi');
+  const pe = routeParcel('aperi', { hex: '4D 5A 90 00', text: '' });
+  assert.equal(pe.kind, 'reject');
+  const calc = routeParcel('calculator', { hex: '', text: '6 * 7' });
+  assert.equal(calc.kind, 'load');
+  if (calc.kind === 'load') assert.equal(calc.payload.expression, '6 * 7');
 
   const summary = sanitizeAnalystSummary({
     byteCount: 4,

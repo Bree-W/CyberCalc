@@ -19,6 +19,7 @@ import { buildCyberChefUrl, chefWindowPath } from '@/integrations/index.ts';
 import AttributionDrawer from '@/components/AttributionDrawer';
 import { TraceHistoryItem, WorkbenchLoad } from '@/types/analysis';
 import { AnalystAction } from '@/lib/analyst';
+import { routeParcel, saveParcel, SendTarget, stageAperi, takePending, ToolParcel } from '@/lib/send-to';
 import { Check } from 'lucide-react';
 
 export default function Home() {
@@ -77,6 +78,31 @@ export default function Home() {
     showToast(`Loaded sample into ${tab}`);
   };
 
+  const deliver = (target: SendTarget, parcel: ToolParcel) => {
+    const route = routeParcel(target, parcel);
+    if (route.kind === 'reject') {
+      showToast(route.toast);
+      return;
+    }
+    if (route.kind === 'load') {
+      pushLoad(route.tab, route.payload);
+      showToast(route.toast);
+      return;
+    }
+    if (route.kind === 'chef') {
+      saveParcel(parcel);
+      showToast(route.toast);
+      router.push(route.href);
+      return;
+    }
+    if (!stageAperi(parcel)) {
+      showToast('That image is too large to hand off in this tab');
+      return;
+    }
+    showToast(route.toast);
+    router.push('/aperi');
+  };
+
   const handleAnalystAction = (
     action: Exclude<AnalystAction, 'none' | 'decode-base64'>,
     hex: string,
@@ -94,16 +120,10 @@ export default function Home() {
     } else if (action === 'identify-hash') {
       pushLoad('hash-detective', { input: text });
       showToast('Model chose hash identification');
-    }
-  };
-
-  const handleSendBytes = (target: 'bitwise-lab' | 'reverse-eng', hex: string) => {
-    if (target === 'bitwise-lab') {
-      pushLoad(target, { subtab: 'repeating-xor', data: hex });
-      showToast('Sent bytes to repeating-key XOR');
-    } else {
-      pushLoad(target, { subtab: 'endianness', input: hex });
-      showToast('Sent bytes to endianness inspector');
+    } else if (action === 'open-cyberchef') {
+      deliver('chef', { hex, text });
+    } else if (action === 'inspect-image') {
+      deliver('aperi', { hex, text });
     }
   };
 
@@ -118,6 +138,12 @@ export default function Home() {
   };
 
   useEffect(() => {
+    const pending = takePending();
+    if (pending && isActiveTab(pending.tab)) {
+      pushLoad(pending.tab, pending.payload);
+      showToast(pending.toast);
+      return;
+    }
     const tab = new URLSearchParams(window.location.search).get('tab');
     if (tab && isActiveTab(tab)) setActiveTab(tab);
   }, []);
@@ -156,7 +182,7 @@ export default function Home() {
               const built = buildCyberChefUrl(handoff.recipe, handoff.bytes);
               router.push(chefWindowPath(built.url));
             }}
-            onSendTo={handleSendBytes}
+            onSend={deliver}
             onApplyAnalyst={handleAnalystAction}
           />
         </div>
@@ -165,19 +191,20 @@ export default function Home() {
             loadRequest={loadRequest}
             resetId={resetId}
             onLogHistory={handleLogHistory}
+            onSend={deliver}
           />
         </div>
         <div className={activeTab === 'conversion-lab' ? undefined : 'hidden'}>
-          <ConversionLab loadRequest={loadRequest} resetId={resetId} onLogHistory={handleLogHistory} />
+          <ConversionLab loadRequest={loadRequest} resetId={resetId} onLogHistory={handleLogHistory} onSend={deliver} />
         </div>
         <div className={activeTab === 'bitwise-lab' ? undefined : 'hidden'}>
-          <BitwiseLab loadRequest={loadRequest} resetId={resetId} onLogHistory={handleLogHistory} />
+          <BitwiseLab loadRequest={loadRequest} resetId={resetId} onLogHistory={handleLogHistory} onSend={deliver} />
         </div>
         <div className={activeTab === 'reverse-eng' ? undefined : 'hidden'}>
-          <ReverseEngineeringLab loadRequest={loadRequest} resetId={resetId} onLogHistory={handleLogHistory} />
+          <ReverseEngineeringLab loadRequest={loadRequest} resetId={resetId} onLogHistory={handleLogHistory} onSend={deliver} />
         </div>
         <div className={activeTab === 'networking' ? undefined : 'hidden'}>
-          <NetworkingLab loadRequest={loadRequest} resetId={resetId} onLogHistory={handleLogHistory} />
+          <NetworkingLab loadRequest={loadRequest} resetId={resetId} onLogHistory={handleLogHistory} onSend={deliver} />
         </div>
         <div className={activeTab === 'calculator' ? undefined : 'hidden'}>
           <StandardCalculator
@@ -186,10 +213,11 @@ export default function Home() {
             resetId={resetId}
             onTriggerEasterEgg={handleTriggerEasterEgg}
             onLogHistory={handleLogHistory}
+            onSend={deliver}
           />
         </div>
         <div className={activeTab === 'integrations' ? undefined : 'hidden'}>
-          <IntegrationsPanel />
+          <IntegrationsPanel loadRequest={loadRequest} onSend={deliver} />
         </div>
       </main>
 

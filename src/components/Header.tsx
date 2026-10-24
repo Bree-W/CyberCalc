@@ -79,7 +79,6 @@ export default function Header({
           {/* Privacy status badge */}
           <div className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded bg-[#0d1424] border border-emerald-500/30 text-emerald-400 text-xs font-mono">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Local tools only</span>
             <span>Local labs / opt-in model</span>
           </div>
 

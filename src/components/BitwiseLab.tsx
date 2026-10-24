@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { SendTarget, ToolParcel } from '@/lib/send-to';
+import SendToBar from './SendToBar';
 import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   BitwiseOp,
@@ -25,11 +27,12 @@ import {
 
 interface BitwiseLabProps {
   onLogHistory: (item: HistoryEntry) => void;
+  onSend?: (target: SendTarget, parcel: ToolParcel) => void;
   loadRequest?: WorkbenchLoad | null;
   resetId?: number;
 }
 
-export default function BitwiseLab({ onLogHistory, loadRequest, resetId = 0 }: BitwiseLabProps) {
+export default function BitwiseLab({ onLogHistory, onSend, loadRequest, resetId = 0 }: BitwiseLabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'bitwise' | 'repeating-xor' | 'single-key-bruteforce'>('repeating-xor');
 
   // Single Operation State
@@ -135,8 +138,15 @@ export default function BitwiseLab({ onLogHistory, loadRequest, resetId = 0 }: B
     });
   };
 
+  const bitwiseParcel: ToolParcel = activeSubTab === 'single-key-bruteforce'
+    ? { hex: bruteForceInput, text: bruteForceInput }
+    : activeSubTab === 'bitwise'
+      ? { hex: '', text: `${operandAStr} ${op} ${operandBStr}` }
+      : { hex: xorDataInput, text: xorDataInput };
+
   return (
     <div className="space-y-6">
+      {onSend && <SendToBar from="bitwise-lab" parcel={bitwiseParcel} onSend={onSend} />}
       {/* Sub-navigation bar */}
       <div className="flex flex-wrap items-center gap-2 bg-[#0b101c] border border-[#1a253e] p-2 rounded-xl">
         <button

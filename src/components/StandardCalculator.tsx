@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { SendTarget, ToolParcel } from '@/lib/send-to';
+import SendToBar from './SendToBar';
 import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import { evaluateExpression, CalcEvalResult } from '@/lib/calculator';
 import { Calculator, Delete, RotateCcw, History, Equal } from 'lucide-react';
@@ -9,6 +11,7 @@ import { Calculator, Delete, RotateCcw, History, Equal } from 'lucide-react';
 interface StandardCalculatorProps {
   onTriggerEasterEgg: (expr: string) => void;
   onLogHistory: (item: HistoryEntry) => void;
+  onSend?: (target: SendTarget, parcel: ToolParcel) => void;
   loadRequest?: WorkbenchLoad | null;
   resetId?: number;
   active?: boolean;
@@ -17,6 +20,7 @@ interface StandardCalculatorProps {
 export default function StandardCalculator({
   onTriggerEasterEgg,
   onLogHistory,
+  onSend,
   loadRequest,
   resetId = 0,
   active = false,
@@ -152,6 +156,14 @@ export default function StandardCalculator({
 
   return (
     <div className="max-w-md mx-auto space-y-4">
+      {onSend && (
+        <SendToBar
+          from="calculator"
+          parcel={{ hex: '', text: expression || displayValue }}
+          onSend={onSend}
+          disabled={!expression && displayValue === '0'}
+        />
+      )}
       {/* Calculator Body */}
       <div className="bg-[#0b101c] border border-[#1a253e] rounded-2xl p-5 shadow-2xl">
         {/* Header */}

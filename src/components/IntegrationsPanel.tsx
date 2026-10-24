@@ -4,6 +4,10 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { encodeBase64 } from '@/core/base64.ts';
+import { SendTarget, ToolParcel } from '@/lib/send-to';
+import { WorkbenchLoad } from '@/types/analysis';
+import SendToBar from './SendToBar';
+import { useWorkbenchLoad } from './useWorkbenchLoad';
 import {
   aperiSolve,
   buildCyberChefUrl,
@@ -29,8 +33,18 @@ function Badge({ label, up }: { label: string; up: boolean | null }) {
   );
 }
 
-export default function IntegrationsPanel() {
+export default function IntegrationsPanel({
+  loadRequest,
+  onSend,
+}: {
+  loadRequest?: WorkbenchLoad | null;
+  onSend?: (target: SendTarget, parcel: ToolParcel) => void;
+}) {
   const router = useRouter();
+  const [handed, setHanded] = useState<ToolParcel | null>(null);
+  useWorkbenchLoad(loadRequest, 'integrations', payload => {
+    setHanded({ hex: payload.hex ?? '', text: payload.text ?? '' });
+  });
   const helloBase64 = encodeBase64(HELLO);
   const bakePath = chefWindowPath(buildCyberChefUrl('to-base64', HELLO).url);
   const [health, setHealth] = useState<{ cyberchef: boolean; aperisolve: boolean } | null>(null);
@@ -123,8 +137,11 @@ export default function IntegrationsPanel() {
 
   const dcodeLink = dcode.launch('');
 
+  const handedParcel = handed ?? { hex: '', text: 'hello' };
+
   return (
     <div className="space-y-6">
+      {onSend && <SendToBar from="integrations" parcel={handedParcel} onSend={onSend} />}
       <section data-testid="trust-strip" className="rounded-xl border border-[#1a253e] bg-[#0b101c] p-4">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="font-cyber text-lg text-slate-100">Open-source tools</h2>
