@@ -2,7 +2,7 @@
 
 > **Decode it. Transform it. Understand it.**
 
-**CyberCalc** is a professional, client-side interactive cybersecurity calculator and byte-analysis workbench. Designed for CTF competitors, reverse engineers, digital forensics analysts, cybersecurity students, and developers, CyberCalc goes beyond simple arithmetic: it demystifies how computers encode, transform, and manipulate binary data.
+**CyberCalc** is an interactive cybersecurity calculator and byte-analysis workbench. Designed for CTF competitors, reverse engineers, digital forensics analysts, cybersecurity students, and developers, CyberCalc goes beyond simple arithmetic: it demystifies how computers encode, transform, and manipulate binary data.
 
 ---
 
@@ -15,10 +15,8 @@
   - Color-coded by byte semantics: printable ASCII (cyan), null bytes (slate), high bytes (amber).
   - Synchronized hover & selection between hex bytes and ASCII representation.
   - Granular byte inspector showing offset, hex nibbles, 8-bit individual bit states ($2^7 \dots 2^0$), unsigned `uint8` (0–255), signed two's complement `int8` (-128–127), and character representation.
-- **Shannon Entropy Engine**: Calculates bit-level entropy ($H = -\sum p_i \log_2 p_i$, 0 to 8 bits/byte) to identify encrypted payloads ($>7.2$), compressed streams, or sparse/padded data ($<3.0$).
-- **File Signature (Magic Bytes) Detection**: Identifies 30+ executable, archive, image, and network header signatures (DOS MZ, ELF, Mach-O, PNG, JPEG, PDF, ZIP, GZ, SQLite, WASM, PCAP, etc.). Includes clear forensic disclaimers clarifying that signature match does not guarantee file integrity or absence of malicious payloads.
-- **Heuristic Pattern Recognition**: Automatically spots null padding runs, repeated byte sequences, NOP sleds, and extracts contiguous ASCII strings with offsets.
-- **File Drag-and-Drop**: Load any local binary or executable directly into browser memory for zero-upload byte inspection.
+- **Byte Representations**: Inspect an interactive byte grid alongside hexadecimal, binary, decimal, and decoded-text views.
+- **File Input**: Load a local binary file into the byte inspector.
 
 ### 1.5 🕵️ Hash Detective
 - **Heuristic Hash Classifier**: Identifies algorithm type, bit length, character set, Hashcat mode flags (`-m`), and John the Ripper formats.
@@ -33,41 +31,37 @@
 - **Mathematical Step Breakdown**: Displays positional weight formulas ($\sum b_i \times 2^i$ and $\sum h_i \times 16^i$) and two's complement sign calculations.
 
 ### 3. ⚙️ Bitwise Operations Lab
-- **Bitwise Logic Visualizer**: Interactive XOR, AND, OR, NOT, Logical Left Shift (`<<`), Logical Right Shift (`>>`), Rotate Left (`ROL`), and Rotate Right (`ROR`). Displays glowing bit comparison rows with changed bits highlighted.
+- **Bitwise Logic Visualizer**: Interactive XOR, AND, OR, NOT, Logical Left Shift (`<<`), Logical Right Shift (`>>`), Rotate Left (`ROL`), and Rotate Right (`ROR`). Displays bit comparison rows with changed bits highlighted.
 - **Repeating-Key XOR Lab**:
   - Cyclically applies arbitrary keys (Hex, Text, or Decimal) across byte sequences.
-  - Implements the specification case: `41 42 43 44` XORed with `0x20` $\rightarrow$ `61 62 63 64` ("abcd"), explaining the ASCII bit-5 case toggling.
   - Cryptography educational warning emphasizing that XOR alone does not equal secure encryption and requires a true One-Time Pad (OTP) for information-theoretic security.
 - **Single-Byte XOR CTF Breaker**: Brute-forces all 256 keys (0x00–0xFF) scored against English letter frequency tables to automatically crack single-byte ciphertexts.
 
 ### 4. 🔬 Reverse-Engineering Tools
 - **Endianness Inspector**:
   - Side-by-side Big-Endian vs. Little-Endian evaluation for 16-bit, 32-bit, 64-bit integers, and IEEE 754 Float32/Float64 values.
-  - Implements specification case: `01 02 03 04` $\rightarrow$ Big-Endian: `16,909,060` vs Little-Endian: `67,305,985`.
   - Visual memory address layout diagram ($base + 0, +1, +2, +3$) illustrating MSB and LSB placement across x86 vs Network byte orders.
 - **Binary Diff (Byte Comparison)**:
   - Compares Sequence A and Sequence B byte-by-byte.
   - Pinpoints matching bytes, differing bytes, insertions, deletions, and percentage similarity.
-- **Magic Bytes Signature Explorer**: Filterable database of standard binary headers.
+  - Loads binary files for comparison (up to 1 MiB per file); long comparisons limit displayed rows while retaining full summary counts.
+- **Magic Bytes Signature Explorer**: Searchable database of standard binary headers, including searches by hexadecimal signature.
 
 ### 5. 🌐 Networking Calculator
 - **IPv4 Address Converter**: Translates between dotted-decimal, 32-bit integer, hex integer, and 4-octet binary.
-- **CIDR Subnet Calculator**: Computes Network Address, Broadcast Address, Subnet Mask, Wildcard Mask, Usable Host Range, Total Address Count, Usable Host Count, Address Class (A–E), and Scope (RFC 1918 Private, Loopback, Carrier-Grade NAT, Public).
+- **CIDR Subnet Calculator**: Computes Network Address, Broadcast Address, Subnet Mask, Wildcard Mask, Usable Host Range, Total Address Count, Usable Host Count, and the number of subnets in a configurable parent prefix.
 - **Subnet Bit Visualizer**: 32-bit visual representation color-coding Network bits vs. Host bits.
 - **TCP Flags Bitmask Inspector**: Interactive 8-bit TCP flag toggles (SYN, ACK, FIN, RST, PSH, URG, ECE, CWR) with explanations of Nmap scan probes (Stealth SYN `-sS`, Xmas scan `-sX`, NULL scan `-sN`, FIN scan `-sF`).
-- **IPv6 Analyzer (Stretch Goal)**: RFC 5952 canonical compression and 128-bit full expansion.
+- **IPv6 Analyzer**: RFC 5952 canonical compression, 128-bit full expansion, network address, inclusive first/last address range, and total address count for a configurable prefix.
 
 ### 6. 🧮 Standard Calculator & Hidden Division-by-Zero Easter Egg
-- Full-featured conventional calculator for everyday arithmetic supporting $+$, $-$, $\times$, $\div$, $\%$, decimal numbers, nested parentheses, keyboard shortcuts, and calculation tape history.
+- Scientific calculator supporting arithmetic, powers, square roots, sine/cosine/tangent (radians), $\pi$, $e$, nested parentheses, keyboard shortcuts, and calculation tape history.
 - **Hidden Easter Egg**:
   - Triggered exclusively when dividing by zero (`x / 0` or `x / (y - y)`).
-  - Displays a full-screen retro CRT glitch distortion and alarm banner: `FATAL ERROR: REALITY DIVISION FAILURE`.
-  - Simulates a kernel panic dump and attempts tab closure via `window.close()`.
-  - Because modern browsers sandbox user-opened tabs from script termination, an emergency containment screen with fake core memory logs and a discreet `[ INITIATE EMERGENCY REBOOT ]` button is provided to cleanly restore the workbench.
+  - Shows a simulated shutdown followed by a mathematical explanation of why division by zero is undefined, then returns to the calculator.
 
-### 7. 📜 Session History & Privacy Guarantee
+### 7. 📜 Session History
 - **Transformation History**: Logs operations, inputs, parameters, outputs, and timestamps with one-click re-load and copy actions.
-- **100% Client-Side Privacy**: All calculations, hashing, and parsing run exclusively in the browser. Zero telemetry, zero server-side storage, zero third-party AI transmission.
 
 ---
 
@@ -118,14 +112,14 @@ npm test
 ```text
 cybercalc/
 ├── public/
-│   └── samples/              # Pre-loaded binary header samples & test hashes
+│   └── samples/              # Example binary headers
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx        # HTML head, dark mode, typography
 │   │   ├── page.tsx          # Master workbench view & modal orchestrator
 │   │   └── globals.css       # Custom cyber scrollbars & glitch animations
 │   ├── components/
-│   │   ├── Header.tsx        # Workbench banner, privacy badge, sample launcher
+│   │   ├── Header.tsx        # Workbench banner and session controls
 │   │   ├── Navigation.tsx    # 7-tab cyber navigation bar
 │   │   ├── ByteGrid.tsx      # Interactive hexdump & 8-bit breakdown panel
 │   │   ├── ByteDetectivePanel.tsx  # Flagship Byte Detective inspection engine
@@ -137,7 +131,6 @@ cybercalc/
 │   │   ├── StandardCalculator.tsx  # Arithmetic calculator with Easter egg hook
 │   │   ├── FatalShutdownModal.tsx  # Division-by-zero glitch overlay
 │   │   ├── TraceHistoryModal.tsx   # Session transformation history drawer
-│   │   └── QuickSamplesModal.tsx   # Curated CTF/forensic sample presets
 │   ├── lib/
 │   │   ├── parse-input.ts    # Multi-format byte parser & ambiguity detector
 │   │   ├── byte-analysis.ts  # Shannon entropy & pattern detection
@@ -147,7 +140,7 @@ cybercalc/
 │   │   ├── xor.ts            # Bitwise operators, repeating XOR & frequency ranker
 │   │   ├── endianness.ts     # Byte-order interpretations & binary diffing
 │   │   ├── networking.ts     # CIDR subnetting, IP math & TCP flags
-│   │   └── calculator.ts     # Shunting-yard expression evaluator
+│   │   └── calculator.ts     # Recursive-descent scientific expression evaluator
 │   └── types/
 │       └── analysis.ts       # Shared TypeScript interfaces & types
 ├── run-tests.mjs             # Node test runner suite
@@ -157,12 +150,9 @@ cybercalc/
 
 ---
 
-## 🔒 Privacy & Forensic Integrity Notice
+## 🔎 Forensic Integrity Notice
 
-CyberCalc is built from the ground up to respect data privacy:
-- Input data never leaves the browser.
-- File analysis processes buffers locally in client RAM without uploading.
-- Signature matches are accompanied by forensic disclaimers clarifying that matching headers alone do not verify complete file safety or validity.
+Magic-byte matches indicate only that an input begins with a recognized signature; they do not verify file integrity or establish that a file is safe.
 
 ---
 

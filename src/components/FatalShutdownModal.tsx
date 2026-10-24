@@ -62,11 +62,11 @@ export default function FatalShutdownModal({
 
   return (
     <div className="fixed bottom-4 right-4 z-50 w-[calc(100vw-2rem)] max-w-2xl max-h-[80vh] overflow-y-auto text-red-500 font-mono">
-      <div className="relative w-full bg-[#0a0505]/95 border-2 border-red-600/80 rounded-lg p-6 shadow-[0_0_50px_rgba(255,0,0,0.5)]">
+      <div className="relative w-full bg-[#0a0505]/95 border-2 border-red-600/80 rounded-lg p-6 shadow-2xl">
         <div className="flex items-center space-x-3 pb-4 border-b border-red-800/60 mb-4 text-red-400">
           <AlertTriangle className="w-8 h-8 text-red-500" />
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-widest text-red-500 glow-text-rose">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-widest text-red-500">
               {stage === 'shutdown' ? 'FAKE SHUTDOWN SIMULATION' : 'ERROR: DIVISION BY ZERO'}
             </h1>
             <p className="text-xs text-red-400/80">

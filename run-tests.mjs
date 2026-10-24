@@ -1,85 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 
-// Test 1: Expression evaluation and Division by Zero Easter Egg detection
-test('Standard Calculator - Evaluation and Division by Zero Easter Egg', () => {
-  function evaluateExpression(expr) {
-    const sanitized = expr.replace(/×/g, '*').replace(/÷/g, '/').replace(/\s+/g, '');
-    if (!sanitized) return { success: true, result: 0, isDivisionByZero: false };
+const require = createRequire(import.meta.url);
+const ts = require('typescript');
+require.extensions['.ts'] = (module, filename) => {
+  const source = readFileSync(filename, 'utf8');
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+  module._compile(outputText, filename);
+};
 
-    const tokens = [];
-    let i = 0;
-    while (i < sanitized.length) {
-      const ch = sanitized[i];
-      if ('+-*/()%'.includes(ch)) {
-        if (ch === '-' && (i === 0 || '+-*/('.includes(sanitized[i - 1]))) {
-          let numStr = '-';
-          i++;
-          while (i < sanitized.length && /[0-9.]/.test(sanitized[i])) {
-            numStr += sanitized[i];
-            i++;
-          }
-          tokens.push(numStr);
-          continue;
-        }
-        tokens.push(ch);
-        i++;
-      } else if (/[0-9.]/.test(ch)) {
-        let numStr = '';
-        while (i < sanitized.length && /[0-9.]/.test(sanitized[i])) {
-          numStr += sanitized[i];
-          i++;
-        }
-        tokens.push(numStr);
-      }
-    }
+const { evaluateExpression } = require('./src/lib/calculator.ts');
+const { analyzeIpv6, calculateSubnet } = require('./src/lib/networking.ts');
+const { compareByteSequences } = require('./src/lib/endianness.ts');
 
-    const outputQueue = [];
-    const opStack = [];
-    const precedence = { '+': 1, '-': 1, '*': 2, '/': 2, '%': 2 };
-
-    for (const token of tokens) {
-      if (!isNaN(Number(token))) {
-        outputQueue.push(token);
-      } else if (token in precedence) {
-        while (opStack.length > 0 && opStack[opStack.length - 1] in precedence && precedence[opStack[opStack.length - 1]] >= precedence[token]) {
-          outputQueue.push(opStack.pop());
-        }
-        opStack.push(token);
-      } else if (token === '(') {
-        opStack.push(token);
-      } else if (token === ')') {
-        while (opStack.length > 0 && opStack[opStack.length - 1] !== '(') {
-          outputQueue.push(opStack.pop());
-        }
-        opStack.pop();
-      }
-    }
-    while (opStack.length > 0) outputQueue.push(opStack.pop());
-
-    const evalStack = [];
-    for (const token of outputQueue) {
-      if (!isNaN(Number(token))) {
-        evalStack.push(Number(token));
-      } else {
-        const b = evalStack.pop();
-        const a = evalStack.pop();
-        if (token === '+') evalStack.push(a + b);
-        else if (token === '-') evalStack.push(a - b);
-        else if (token === '*') evalStack.push(a * b);
-        else if (token === '/') {
-          if (Math.abs(b) < 1e-12) return { success: false, isDivisionByZero: true };
-          evalStack.push(a / b);
-        }
-      }
-    }
-    return { success: true, result: evalStack[0], isDivisionByZero: false };
-  }
-
+test('Standard Calculator - Scientific evaluation and division-by-zero detection', () => {
   assert.equal(evaluateExpression('2 + 3 * 4').result, 14);
   assert.equal(evaluateExpression('(10 - 2) / 2').result, 4);
+  assert.equal(evaluateExpression('2^3^2').result, 512);
+  assert.equal(evaluateExpression('-2^2').result, -4);
+  assert.equal(evaluateExpression('sqrt(81)').result, 9);
+  assert.equal(evaluateExpression('sin(pi / 2)').result, 1);
+  assert.equal(evaluateExpression('pi').result, Math.PI);
+  assert.equal(evaluateExpression('e').result, Math.E);
   assert.equal(evaluateExpression('42 / 0').isDivisionByZero, true);
   assert.equal(evaluateExpression('100 / (5 - 5)').isDivisionByZero, true);
+  assert.equal(evaluateExpression('constructor').success, false);
+  assert.equal(evaluateExpression('toString(1)').success, false);
 });
 
 // Test 2: Repeating-Key XOR (Specification Example: 41424344 ^ 20 -> 61 62 63 64 / "abcd")
@@ -104,24 +57,37 @@ test('Reverse Engineering - Endianness Spec Example', () => {
   assert.equal(leUint, 67305985);
 });
 
-// Test 4: Networking - CIDR Subnet calculations
-test('Networking - IPv4 CIDR Subnet calculations', () => {
-  const ip = (192 << 24) | (168 << 16) | (1 << 8) | 100;
-  const prefix = 24;
-  const mask = (~0 << (32 - prefix)) >>> 0;
-  const network = (ip & mask) >>> 0;
-  const broadcast = (network | (~mask >>> 0)) >>> 0;
-  const usableHosts = Math.pow(2, 32 - prefix) - 2;
+test('Networking - IPv4 subnet calculations include subnet and usable-host counts', () => {
+  const result = calculateSubnet('192.168.1.100', 24, 16);
+  assert.equal('error' in result, false);
+  if ('error' in result) return;
 
-  function toIp(num) {
-    return `${(num >>> 24) & 255}.${(num >>> 16) & 255}.${(num >>> 8) & 255}.${num & 255}`;
-  }
+  assert.equal(result.networkAddress, '192.168.1.0');
+  assert.equal(result.broadcastAddress, '192.168.1.255');
+  assert.equal(result.firstUsableHost, '192.168.1.1');
+  assert.equal(result.lastUsableHost, '192.168.1.254');
+  assert.equal(result.usableHosts, 254);
+  assert.equal(result.subnetCount, 256);
 
-  assert.equal(toIp(network), '192.168.1.0');
-  assert.equal(toIp(broadcast), '192.168.1.255');
-  assert.equal(toIp(network + 1), '192.168.1.1');
-  assert.equal(toIp(broadcast - 1), '192.168.1.254');
-  assert.equal(usableHosts, 254);
+  assert.equal('error' in calculateSubnet('192.168.1.1', 24, 25), true);
+});
+
+test('Networking - IPv6 prefix range calculations', () => {
+  const result = analyzeIpv6('2001:db8::1234', 64);
+  assert.equal(result.isValid, true);
+  assert.equal(result.compressed, '2001:db8::1234');
+  assert.equal(result.networkAddress, '2001:db8::');
+  assert.equal(result.firstAddress, '2001:db8::');
+  assert.equal(result.lastAddress, '2001:db8::ffff:ffff:ffff:ffff');
+  assert.equal(result.totalAddresses, 1n << 64n);
+  assert.equal(analyzeIpv6('2001:db8::1', 129).isValid, false);
+});
+
+test('Reverse Engineering - Binary diff bounds displayed byte rows', () => {
+  const result = compareByteSequences(new Uint8Array(5000), new Uint8Array(5000));
+  assert.equal(result.matchingCount, 5000);
+  assert.equal(result.entries.length, 4096);
+  assert.equal(result.entriesTruncated, true);
 });
 
 // Test 5: Two's complement integer math and bit widths

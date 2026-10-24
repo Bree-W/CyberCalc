@@ -16,6 +16,8 @@ export interface SubnetResult {
   lastUsableHost: string;
   totalAddresses: number;
   usableHosts: number;
+  parentPrefix: number;
+  subnetCount: number;
   ipClass: 'A' | 'B' | 'C' | 'D' | 'E';
   scope: string;
   isPrivate: boolean;
@@ -61,9 +63,18 @@ export function numberToIpv4(num: number): string {
   return `${(n >>> 24) & 255}.${(n >>> 16) & 255}.${(n >>> 8) & 255}.${n & 255}`;
 }
 
-export function calculateSubnet(ipInput: string, prefixInput: number | string = 24): SubnetResult | { error: string } {
+export function calculateSubnet(
+  ipInput: string,
+  prefixInput: number | string = 24,
+  parentPrefixInput?: number | string,
+): SubnetResult | { error: string } {
   let ipStr = ipInput.trim();
   let prefix = typeof prefixInput === 'number' ? prefixInput : parseInt(prefixInput.toString(), 10);
+  let parentPrefix = parentPrefixInput === undefined
+    ? prefix
+    : typeof parentPrefixInput === 'number'
+      ? parentPrefixInput
+      : parseInt(parentPrefixInput.toString(), 10);
 
   // Check if input contains CIDR slash e.g. "192.168.1.50/24"
   if (ipStr.includes('/')) {
@@ -77,8 +88,14 @@ export function calculateSubnet(ipInput: string, prefixInput: number | string = 
     return { error: `Invalid IPv4 address format "${ipInput}". Expected dotted quad like 192.168.1.1` };
   }
 
-  if (isNaN(prefix) || prefix < 0 || prefix > 32) {
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > 32) {
     return { error: `Invalid CIDR prefix /${prefix}. Expected an integer between 0 and 32.` };
+  }
+
+  if (!Number.isInteger(parentPrefix) || parentPrefix < 0 || parentPrefix > prefix) {
+    return {
+      error: `Invalid parent prefix /${parentPrefix}. It must be an integer between 0 and the subnet prefix /${prefix}.`,
+    };
   }
 
   // Calculate subnet mask
@@ -177,6 +194,8 @@ export function calculateSubnet(ipInput: string, prefixInput: number | string = 
     lastUsableHost,
     totalAddresses,
     usableHosts,
+    parentPrefix,
+    subnetCount: Math.pow(2, prefix - parentPrefix),
     ipClass,
     scope,
     isPrivate,
@@ -238,16 +257,53 @@ export function decodeTcpFlags(flagByte: number): TcpFlagsDecoded {
   };
 }
 
-// IPv6 Expansion and Analysis (Stretch Goal)
-export function analyzeIpv6(ipv6Str: string): {
+function numberToIpv6(address: bigint): string {
+  const hex = address.toString(16).padStart(32, '0');
+  const hextets = Array.from({ length: 8 }, (_, index) =>
+    parseInt(hex.slice(index * 4, index * 4 + 4), 16),
+  );
+
+  let bestStart = -1;
+  let bestLength = 1;
+  for (let start = 0; start < hextets.length;) {
+    if (hextets[start] !== 0) {
+      start++;
+      continue;
+    }
+
+    let end = start;
+    while (end < hextets.length && hextets[end] === 0) end++;
+    if (end - start > bestLength) {
+      bestStart = start;
+      bestLength = end - start;
+    }
+    start = end;
+  }
+
+  if (bestStart === -1) return hextets.map(value => value.toString(16)).join(':');
+  const left = hextets.slice(0, bestStart).map(value => value.toString(16)).join(':');
+  const right = hextets.slice(bestStart + bestLength).map(value => value.toString(16)).join(':');
+  return `${left}::${right}`;
+}
+
+export function analyzeIpv6(ipv6Str: string, prefixInput: number | string = 64): {
   isValid: boolean;
   expanded?: string;
   compressed?: string;
   scope?: string;
+  prefix?: number;
+  networkAddress?: string;
+  firstAddress?: string;
+  lastAddress?: string;
+  totalAddresses?: bigint;
   error?: string;
 } {
   const trimmed = ipv6Str.trim().toLowerCase();
   if (!trimmed) return { isValid: false, error: 'Empty IPv6 string.' };
+  const prefix = typeof prefixInput === 'number' ? prefixInput : parseInt(prefixInput.toString(), 10);
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > 128) {
+    return { isValid: false, error: `Invalid IPv6 prefix /${prefix}. Expected an integer between 0 and 128.` };
+  }
 
   // Expand ::
   let parts: string[];
@@ -275,6 +331,11 @@ export function analyzeIpv6(ipv6Str: string): {
   }
 
   const expanded = parts.map(p => p.padStart(4, '0')).join(':');
+  const address = BigInt(`0x${parts.map(part => part.padStart(4, '0')).join('')}`);
+  const hostBits = BigInt(128 - prefix);
+  const totalAddresses = 1n << hostBits;
+  const networkAddress = (address >> hostBits) << hostBits;
+  const lastAddress = networkAddress + totalAddresses - 1n;
 
   let scope = 'Global Unicast';
   if (expanded === '0000:0000:0000:0000:0000:0000:0000:0001') {
@@ -292,7 +353,12 @@ export function analyzeIpv6(ipv6Str: string): {
   return {
     isValid: true,
     expanded,
-    compressed: trimmed,
+    compressed: numberToIpv6(address),
     scope,
+    prefix,
+    networkAddress: numberToIpv6(networkAddress),
+    firstAddress: numberToIpv6(networkAddress),
+    lastAddress: numberToIpv6(lastAddress),
+    totalAddresses,
   };
 }

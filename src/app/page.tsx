@@ -12,27 +12,21 @@ import NetworkingLab from '@/components/NetworkingLab';
 import StandardCalculator from '@/components/StandardCalculator';
 import FatalShutdownModal from '@/components/FatalShutdownModal';
 import TraceHistoryModal from '@/components/TraceHistoryModal';
-import QuickSamplesModal from '@/components/QuickSamplesModal';
 import { TraceHistoryItem } from '@/types/analysis';
-import { Check, ShieldCheck, Terminal } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('byte-detective');
   const [history, setHistory] = useState<TraceHistoryItem[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
-  const [isSamplesOpen, setIsSamplesOpen] = useState<boolean>(false);
 
   // Easter Egg State
   const [isEasterEggActive, setIsEasterEggActive] = useState<boolean>(false);
   const [easterEggExpr, setEasterEggExpr] = useState<string>('42 / 0');
 
   // Cross-tool injection state
-  const [byteDetectiveInput, setByteDetectiveInput] = useState<string>(
-    '4D 5A 90 00 03 00 00 00 04 00 00 00 FF FF 00 00'
-  );
-  const [hashDetectiveInput, setHashDetectiveInput] = useState<string>(
-    '5d41402abc4b2a76b9719d911017c592'
-  );
+  const [byteDetectiveInput, setByteDetectiveInput] = useState<string>('');
+  const [hashDetectiveInput, setHashDetectiveInput] = useState<string>('');
 
   // Toast Notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -63,16 +57,6 @@ export default function Home() {
     showToast('Workbench inputs reset');
   };
 
-  const handleSelectSample = (tab: ActiveTab, sampleData: string) => {
-    setActiveTab(tab);
-    if (tab === 'byte-detective') {
-      setByteDetectiveInput(sampleData);
-    } else if (tab === 'hash-detective') {
-      setHashDetectiveInput(sampleData);
-    }
-    showToast(`Loaded sample into ${tab}`);
-  };
-
   const handleTriggerEasterEgg = (expr: string) => {
     setEasterEggExpr(expr);
     setIsEasterEggActive(true);
@@ -88,7 +72,6 @@ export default function Home() {
       {/* Top Header */}
       <Header
         onOpenHistory={() => setIsHistoryOpen(true)}
-        onOpenSamples={() => setIsSamplesOpen(true)}
         onReset={handleResetWorkbench}
         historyCount={history.length}
       />
@@ -100,7 +83,7 @@ export default function Home() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Toast Alert */}
         {toastMessage && (
-          <div className="fixed bottom-6 right-6 z-50 bg-[#0e172a] border border-cyan-500/50 text-cyan-300 px-4 py-2.5 rounded-lg shadow-neon-cyan font-mono text-xs flex items-center space-x-2 animate-bounce">
+          <div className="fixed bottom-6 right-6 z-50 bg-[#0e172a] border border-cyan-500/50 text-cyan-300 px-4 py-2.5 rounded-lg shadow-neon-cyan font-mono text-xs flex items-center space-x-2">
             <Check className="w-4 h-4 text-emerald-400" />
             <span>{toastMessage}</span>
           </div>
@@ -158,11 +141,6 @@ export default function Home() {
             <span className="text-cyan-400 font-bold">CYBERCALC</span>
             <span>— Forensic &amp; Cryptographic Data Workbench</span>
           </div>
-          <div className="flex items-center space-x-4 text-slate-400">
-            <span>100% Client-Side Engine</span>
-            <span>•</span>
-            <span>Zero Backend Footprint</span>
-          </div>
         </div>
       </footer>
 
@@ -188,12 +166,6 @@ export default function Home() {
           }
           showToast(`Loaded "${item.operation}"`);
         }}
-      />
-
-      <QuickSamplesModal
-        isOpen={isSamplesOpen}
-        onClose={() => setIsSamplesOpen(false)}
-        onSelectSample={handleSelectSample}
       />
     </div>
   );

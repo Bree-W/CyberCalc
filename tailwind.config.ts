@@ -51,11 +51,11 @@ const config: Config = {
         ],
       },
       boxShadow: {
-        "neon-cyan": "0 0 15px rgba(0, 240, 255, 0.25)",
-        "neon-teal": "0 0 15px rgba(0, 229, 163, 0.25)",
-        "neon-rose": "0 0 15px rgba(255, 51, 102, 0.35)",
-        "neon-amber": "0 0 15px rgba(255, 184, 0, 0.25)",
-        "inner-glow": "inset 0 0 12px rgba(0, 240, 255, 0.1)",
+        "neon-cyan": "0 1px 3px rgba(0, 0, 0, 0.35)",
+        "neon-teal": "0 1px 3px rgba(0, 0, 0, 0.35)",
+        "neon-rose": "0 1px 3px rgba(0, 0, 0, 0.35)",
+        "neon-amber": "0 1px 3px rgba(0, 0, 0, 0.35)",
+        "inner-glow": "inset 0 1px 2px rgba(0, 0, 0, 0.2)",
       },
       animation: {
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
