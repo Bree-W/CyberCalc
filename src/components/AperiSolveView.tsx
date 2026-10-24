@@ -235,7 +235,9 @@ export default function AperiSolveView() {
     const incoming = takeAperiBytes();
     const kind = incoming ? detectAllowedImage(incoming) : null;
     if (incoming && kind) {
-      void runUploadedFile(new File([incoming], filenameForImage('handoff', kind)));
+      const copy = new ArrayBuffer(incoming.byteLength);
+      new Uint8Array(copy).set(incoming);
+      void runUploadedFile(new File([copy], filenameForImage('handoff', kind)));
       return;
     }
     void runSampleByName('example1.png');
