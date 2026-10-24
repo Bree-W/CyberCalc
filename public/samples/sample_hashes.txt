@@ -1,0 +1,25 @@
+# Sample Hashes for CyberCalc Hash Detective
+
+# MD5 ("hello")
+5d41402abc4b2a76b9719d911017c592
+
+# NTLM ("Password123")
+cd3707204b407b48325a2cf6c632616f
+
+# SHA-1 ("hello")
+aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d
+
+# SHA-256 ("hello")
+2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+
+# Bcrypt ($2a$12$...)
+$2a$12$R9h/cIPz0gi.URNNX3kh2OPST9/PgBkqquzi.Ss7KIUgO2t0jWMUW
+
+# Argon2id
+$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$RdescudvJCsgqlfreSAHgQ
+
+# Cisco Type 7
+0822455B0A15
+
+# CRC-32 ("hello")
+3610A686
