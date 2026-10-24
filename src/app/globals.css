@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #06090e;
+  --foreground: #e6edf3;
+  --cyber-teal: #00e5a3;
+  --cyber-cyan: #00f0ff;
+  --cyber-green: #39ff14;
+  --cyber-dark: #0a0e17;
+  --cyber-card: #0e1422;
+  --cyber-border: #1a233a;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Custom Cyber Scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: #090d16;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1b2640;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00e5a3;
+}
+
+/* Subtle CRT scanline effect (non-intrusive) */
+.scanlines-overlay {
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.25) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+}
+
+/* Monospace font styling helper */
+.font-cyber {
+  font-family: "JetBrains Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+}
+
+/* Glowing text utility */
+.glow-text-cyan {
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+}
+
+.glow-text-teal {
+  text-shadow: 0 0 10px rgba(0, 229, 163, 0.6);
+}
+
+.glow-text-green {
+  text-shadow: 0 0 10px rgba(57, 255, 20, 0.6);
+}
+
+.glow-text-rose {
+  text-shadow: 0 0 10px rgba(255, 51, 102, 0.8);
+}
