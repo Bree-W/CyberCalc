@@ -15,14 +15,14 @@
   - Color-coded by byte semantics: printable ASCII (cyan), null bytes (slate), high bytes (amber).
   - Synchronized hover & selection between hex bytes and ASCII representation.
   - Granular byte inspector showing offset, hex nibbles, 8-bit individual bit states ($2^7 \dots 2^0$), unsigned `uint8` (0–255), signed two's complement `int8` (-128–127), and character representation.
-- **Shannon Entropy Engine**: Calculates bit-level entropy ($H = -\sum p_i \log_2 p_i$, 0 to 8 bits/byte) to identify encrypted payloads ($>7.2$), compressed streams, or sparse/padded data ($<3.0$).
-- **File Signature (Magic Bytes) Detection**: Identifies 30+ executable, archive, image, and network header signatures (DOS MZ, ELF, Mach-O, PNG, JPEG, PDF, ZIP, GZ, SQLite, WASM, PCAP, etc.). Includes clear forensic disclaimers clarifying that signature match does not guarantee file integrity or absence of malicious payloads.
+- **Shannon Entropy Engine**: Calculates bit-level entropy ($H = -\sum p_i \log_2 p_i$, 0 to 8 bits/byte). Samples of at least 16 bytes are called high entropy above 7.3 (encrypted or compressed) and low entropy below 2.5 (sparse or padded).
+- **File Signature (Magic Bytes) Detection**: Identifies 30 executable, archive, image, and network header signatures (DOS MZ, ELF, Mach-O, PNG, JPEG, PDF, ZIP, GZ, SQLite, WASM, PCAP, WAV, AVI, WebP, etc.). Includes clear forensic disclaimers clarifying that signature match does not guarantee file integrity or absence of malicious payloads.
 - **Heuristic Pattern Recognition**: Automatically spots null padding runs, repeated byte sequences, NOP sleds, and extracts contiguous ASCII strings with offsets.
-- **File Drag-and-Drop**: Load any local binary or executable directly into browser memory for zero-upload byte inspection.
+- **File Drag-and-Drop**: Drop a local binary onto the Byte Detective input, or use Load File. Inspection stays in browser memory and previews the first 64 KB so a large file does not freeze the tab.
 
 ### 1.5 🕵️ Hash Detective
 - **Heuristic Hash Classifier**: Identifies algorithm type, bit length, character set, Hashcat mode flags (`-m`), and John the Ripper formats.
-- **Probabilistic Ranking & Scroll Bar**: Displays the primary match alongside ranked alternate candidates with probability percentages and visual scroll bars.
+- **Length-and-Format Ranking**: Displays the primary guess alongside alternate candidates. The percentages are priors from length and prefix, not a proof of which algorithm produced the digest.
 - **Supports**: MD5, SHA-1, SHA-224, SHA-256, SHA-384, SHA-512, SHA3/Keccak, NTLM, LM, MD4, CRC-32, CRC-64, Bcrypt (`$2a$`, `$2b$`), Argon2id, Unix crypt (`$6$`, `$5$`, `$1$`), Cisco Type 7, and JWTs.
 - **Client-Side Live Hasher**: Instantly hash any text or bytes into MD5, SHA-1, SHA-256, SHA-512, and CRC-32 using browser-native Web Crypto and pure JS algorithms.
 

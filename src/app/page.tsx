@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import Header from '@/components/Header';
 import Navigation, { ActiveTab } from '@/components/Navigation';
 import ByteDetectivePanel from '@/components/ByteDetectivePanel';
@@ -13,8 +13,8 @@ import StandardCalculator from '@/components/StandardCalculator';
 import FatalShutdownModal from '@/components/FatalShutdownModal';
 import TraceHistoryModal from '@/components/TraceHistoryModal';
 import QuickSamplesModal from '@/components/QuickSamplesModal';
-import { TraceHistoryItem } from '@/types/analysis';
-import { Check, ShieldCheck, Terminal } from 'lucide-react';
+import { TraceHistoryItem, WorkbenchLoad } from '@/types/analysis';
+import { Check } from 'lucide-react';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('byte-detective');
@@ -25,14 +25,9 @@ export default function Home() {
   // Easter Egg State
   const [isEasterEggActive, setIsEasterEggActive] = useState<boolean>(false);
   const [easterEggExpr, setEasterEggExpr] = useState<string>('42 / 0');
-
-  // Cross-tool injection state
-  const [byteDetectiveInput, setByteDetectiveInput] = useState<string>(
-    '4D 5A 90 00 03 00 00 00 04 00 00 00 FF FF 00 00'
-  );
-  const [hashDetectiveInput, setHashDetectiveInput] = useState<string>(
-    '5d41402abc4b2a76b9719d911017c592'
-  );
+  const [loadRequest, setLoadRequest] = useState<WorkbenchLoad | null>(null);
+  const [resetId, setResetId] = useState(0);
+  const loadSeq = useRef(0);
 
   // Toast Notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -42,13 +37,13 @@ export default function Home() {
     setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const handleLogHistory = (item: {
-    tool: TraceHistoryItem['tool'];
-    operation: string;
-    inputSummary: string;
-    params?: string;
-    resultSummary: string;
-  }) => {
+  const pushLoad = (tab: ActiveTab, payload: Record<string, string>) => {
+    loadSeq.current += 1;
+    setActiveTab(tab);
+    setLoadRequest({ id: loadSeq.current, tab, payload });
+  };
+
+  const handleLogHistory = (item: Omit<TraceHistoryItem, 'id' | 'timestamp'>) => {
     const newItem: TraceHistoryItem = {
       id: Math.random().toString(36).substring(2, 9),
       timestamp: Date.now(),
@@ -58,19 +53,31 @@ export default function Home() {
   };
 
   const handleResetWorkbench = () => {
-    setByteDetectiveInput('');
-    setHashDetectiveInput('');
+    setResetId(id => id + 1);
     showToast('Workbench inputs reset');
   };
 
   const handleSelectSample = (tab: ActiveTab, sampleData: string) => {
-    setActiveTab(tab);
-    if (tab === 'byte-detective') {
-      setByteDetectiveInput(sampleData);
+    if (tab === 'bitwise-lab') {
+      pushLoad(tab, { subtab: 'repeating-xor', data: sampleData, key: '20' });
+    } else if (tab === 'reverse-eng') {
+      pushLoad(tab, { subtab: 'endianness', input: sampleData });
     } else if (tab === 'hash-detective') {
-      setHashDetectiveInput(sampleData);
+      pushLoad(tab, { input: sampleData });
+    } else {
+      pushLoad(tab, { input: sampleData, format: 'hex' });
     }
     showToast(`Loaded sample into ${tab}`);
+  };
+
+  const handleSendBytes = (target: 'bitwise-lab' | 'reverse-eng', hex: string) => {
+    if (target === 'bitwise-lab') {
+      pushLoad(target, { subtab: 'repeating-xor', data: hex });
+      showToast('Sent bytes to repeating-key XOR');
+    } else {
+      pushLoad(target, { subtab: 'endianness', input: hex });
+      showToast('Sent bytes to endianness inspector');
+    }
   };
 
   const handleTriggerEasterEgg = (expr: string) => {
@@ -106,49 +113,43 @@ export default function Home() {
           </div>
         )}
 
-        {/* 1. Byte Detective */}
-        {activeTab === 'byte-detective' && (
+        {/* Labs stay mounted so switching tabs keeps what you typed. */}
+        <div className={activeTab === 'byte-detective' ? undefined : 'hidden'}>
           <ByteDetectivePanel
-            initialInput={byteDetectiveInput}
+            loadRequest={loadRequest}
+            resetId={resetId}
             onLogHistory={handleLogHistory}
+            onSendTo={handleSendBytes}
           />
-        )}
-
-        {/* 1.5 Hash Detective */}
-        {activeTab === 'hash-detective' && (
+        </div>
+        <div className={activeTab === 'hash-detective' ? undefined : 'hidden'}>
           <HashDetectivePanel
-            initialHash={hashDetectiveInput}
+            loadRequest={loadRequest}
+            resetId={resetId}
             onLogHistory={handleLogHistory}
           />
-        )}
-
-        {/* 2. Conversion Lab */}
-        {activeTab === 'conversion-lab' && (
-          <ConversionLab onLogHistory={handleLogHistory} />
-        )}
-
-        {/* 3. Bitwise Operations */}
-        {activeTab === 'bitwise-lab' && (
-          <BitwiseLab onLogHistory={handleLogHistory} />
-        )}
-
-        {/* 4. Reverse Engineering */}
-        {activeTab === 'reverse-eng' && (
-          <ReverseEngineeringLab onLogHistory={handleLogHistory} />
-        )}
-
-        {/* 5. Networking */}
-        {activeTab === 'networking' && (
-          <NetworkingLab onLogHistory={handleLogHistory} />
-        )}
-
-        {/* 6. Standard Calculator */}
-        {activeTab === 'calculator' && (
+        </div>
+        <div className={activeTab === 'conversion-lab' ? undefined : 'hidden'}>
+          <ConversionLab loadRequest={loadRequest} resetId={resetId} onLogHistory={handleLogHistory} />
+        </div>
+        <div className={activeTab === 'bitwise-lab' ? undefined : 'hidden'}>
+          <BitwiseLab loadRequest={loadRequest} resetId={resetId} onLogHistory={handleLogHistory} />
+        </div>
+        <div className={activeTab === 'reverse-eng' ? undefined : 'hidden'}>
+          <ReverseEngineeringLab loadRequest={loadRequest} resetId={resetId} onLogHistory={handleLogHistory} />
+        </div>
+        <div className={activeTab === 'networking' ? undefined : 'hidden'}>
+          <NetworkingLab loadRequest={loadRequest} resetId={resetId} onLogHistory={handleLogHistory} />
+        </div>
+        <div className={activeTab === 'calculator' ? undefined : 'hidden'}>
           <StandardCalculator
+            active={activeTab === 'calculator'}
+            loadRequest={loadRequest}
+            resetId={resetId}
             onTriggerEasterEgg={handleTriggerEasterEgg}
             onLogHistory={handleLogHistory}
           />
-        )}
+        </div>
       </main>
 
       {/* Footer */}
@@ -179,14 +180,12 @@ export default function Home() {
         history={history}
         onClear={() => setHistory([])}
         onSelectHistoryItem={item => {
-          if (item.tool === 'Byte Detective') {
-            setActiveTab('byte-detective');
-            setByteDetectiveInput(item.inputSummary);
-          } else if (item.tool === 'Hash Detective') {
-            setActiveTab('hash-detective');
-            setHashDetectiveInput(item.inputSummary);
+          if (item.restoreTab && item.restore) {
+            pushLoad(item.restoreTab, item.restore);
+            showToast(`Loaded "${item.operation}"`);
+            return;
           }
-          showToast(`Loaded "${item.operation}"`);
+          showToast('This entry has no stored input to reload');
         }}
       />
 

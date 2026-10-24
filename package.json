@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --test run-tests.mjs"
+    "test": "node --experimental-strip-types --import ./test/register.mjs --test run-tests.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

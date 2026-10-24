@@ -1,27 +1,42 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import { evaluateExpression, CalcEvalResult } from '@/lib/calculator';
 import { Calculator, Delete, RotateCcw, History, Equal } from 'lucide-react';
 
 interface StandardCalculatorProps {
   onTriggerEasterEgg: (expr: string) => void;
-  onLogHistory: (item: {
-    tool: 'Standard Calculator';
-    operation: string;
-    inputSummary: string;
-    params?: string;
-    resultSummary: string;
-  }) => void;
+  onLogHistory: (item: HistoryEntry) => void;
+  loadRequest?: WorkbenchLoad | null;
+  resetId?: number;
+  active?: boolean;
 }
 
 export default function StandardCalculator({
   onTriggerEasterEgg,
   onLogHistory,
+  loadRequest,
+  resetId = 0,
+  active = false,
 }: StandardCalculatorProps) {
   const [expression, setExpression] = useState<string>('');
   const [displayValue, setDisplayValue] = useState<string>('0');
   const [historyTape, setHistoryTape] = useState<Array<{ expr: string; result: string }>>([]);
+
+  useWorkbenchLoad(loadRequest, 'calculator', payload => {
+    if (payload.expression != null) {
+      setExpression(payload.expression);
+      setDisplayValue(payload.expression || '0');
+    }
+  });
+
+  useWorkbenchReset(resetId, () => {
+    setExpression('');
+    setDisplayValue('0');
+    setHistoryTape([]);
+  });
 
   const handleInput = (val: string) => {
     setExpression(prev => prev + val);
@@ -50,6 +65,8 @@ export default function StandardCalculator({
         operation: 'Division by Zero Exception',
         inputSummary: expression,
         resultSummary: 'FATAL ERROR: REALITY DIVISION FAILURE (Triggered Easter Egg)',
+        restoreTab: 'calculator',
+        restore: { expression },
       });
       onTriggerEasterEgg(expression);
       return;
@@ -64,6 +81,8 @@ export default function StandardCalculator({
         operation: 'Evaluate Expression',
         inputSummary: expression,
         resultSummary: formatted,
+        restoreTab: 'calculator',
+        restore: { expression },
       });
       setExpression(formatted);
     } else {
@@ -73,6 +92,7 @@ export default function StandardCalculator({
 
   // Keyboard support
   useEffect(() => {
+    if (!active) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if user is typing in another input element
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) {
@@ -101,7 +121,7 @@ export default function StandardCalculator({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [expression]);
+  }, [expression, active]);
 
   const buttons = [
     { label: 'C', action: handleClear, style: 'text-red-400 bg-[#151c2e] hover:bg-[#1f2a45]' },
