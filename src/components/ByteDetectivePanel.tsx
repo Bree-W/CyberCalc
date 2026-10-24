@@ -228,6 +228,38 @@ export default function ByteDetectivePanel({
           </div>
         )}
 
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="font-mono text-[11px] text-slate-500">Samples</span>
+          {(
+            [
+              ['PE header', '4D 5A 90 00 03 00 00 00 04 00 00 00 FF FF 00 00', 'hex'],
+              ['Base64', 'SGVsbG8gV29ybGQhIQ==', 'base64'],
+              ['Single-byte XOR', '1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736', 'hex'],
+            ] as const
+          ).map(([label, input, nextFormat]) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => {
+                setFormat(nextFormat);
+                setRawInput(input);
+                setFileNotice(null);
+                onLogHistory({
+                  tool: 'Byte Detective',
+                  operation: `Sample: ${label}`,
+                  inputSummary: input.slice(0, 80),
+                  resultSummary: 'Loaded sample',
+                  restoreTab: 'byte-detective',
+                  restore: { input, format: nextFormat },
+                });
+              }}
+              className="rounded border border-[#202d4a] bg-[#101726] px-2 py-0.5 font-mono text-[11px] text-cyan-300 hover:bg-[#18233a]"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#162035] pt-3">
           {onSend && (
             <SendToBar

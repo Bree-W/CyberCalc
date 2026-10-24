@@ -181,7 +181,9 @@ cybercalc/
 Magic-byte matches indicate only that an input begins with a recognized signature; they do not verify file integrity or establish that a file is safe.
 Byte analysis, hashing, and other lab calculations run locally in the browser. The optional open-model action sends a short summary to DigitalOcean Serverless Inference only after the user explicitly selects it; the API key remains server-side.
 
+The model is [`openai-gpt-oss-20b`](https://huggingface.co/openai/gpt-oss-20b), an open-weight model served by DigitalOcean. Its weights are under the [Apache License 2.0](https://github.com/openai/gpt-oss/blob/main/LICENSE). It chooses the next lab. It does not receive the API key, and it does not replace the local math.
+
 ---
 
 ## 📜 License
-MIT License. Built for cybersecurity education, digital forensics research, and CTF competitions.
+[MIT License](LICENSE). Built for cybersecurity education, digital forensics research, and CTF competitions.
