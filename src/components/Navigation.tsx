@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import {
   Binary,
   Hash,
@@ -9,6 +10,8 @@ import {
   Boxes,
   Network,
   Calculator,
+  Puzzle,
+  ChefHat,
 } from 'lucide-react';
 
 export type ActiveTab =
@@ -18,11 +21,66 @@ export type ActiveTab =
   | 'bitwise-lab'
   | 'reverse-eng'
   | 'networking'
-  | 'calculator';
+  | 'calculator'
+  | 'integrations';
+
+const TAB_IDS: ActiveTab[] = [
+  'byte-detective',
+  'hash-detective',
+  'conversion-lab',
+  'bitwise-lab',
+  'reverse-eng',
+  'networking',
+  'calculator',
+  'integrations',
+];
+
+export function isActiveTab(value: string): value is ActiveTab {
+  return (TAB_IDS as string[]).includes(value);
+}
 
 interface NavigationProps {
-  activeTab: ActiveTab;
-  onTabChange: (tab: ActiveTab) => void;
+  activeTab: ActiveTab | 'chef';
+  onTabChange?: (tab: ActiveTab) => void;
+}
+
+function tabClass(isActive: boolean, isSecondary?: boolean): string {
+  const state = isActive
+    ? 'bg-[#0e172a] text-cyan-300 border border-cyan-500/50 shadow-neon-cyan'
+    : isSecondary
+      ? 'text-slate-400 hover:text-slate-200 hover:bg-[#0d1424] opacity-80 border border-transparent'
+      : 'text-slate-400 hover:text-slate-200 hover:bg-[#0d1424] border border-transparent';
+  return `flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-mono whitespace-nowrap transition-all duration-150 ${state}`;
+}
+
+function TabInner({
+  icon: Icon,
+  label,
+  badge,
+  isActive,
+  muted,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  badge?: string;
+  isActive: boolean;
+  muted?: boolean;
+}) {
+  return (
+    <>
+      <Icon className={`w-4 h-4 ${isActive ? (muted ? 'text-slate-300' : 'text-cyan-400') : 'text-slate-400'}`} />
+      <span className="font-medium">{label}</span>
+      {badge && (
+        <span
+          className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
+            isActive ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-[#141d2f] text-slate-400'
+          }`}
+        >
+          {badge}
+        </span>
+      )}
+    </>
+  );
 }
 
 export default function Navigation({ activeTab, onTabChange }: NavigationProps) {
@@ -77,6 +135,13 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
       accent: 'slate',
       isSecondary: true,
     },
+    {
+      id: 'integrations' as ActiveTab,
+      label: 'Integrations',
+      badge: '7',
+      icon: Puzzle,
+      accent: 'emerald',
+    },
   ];
 
   return (
@@ -84,46 +149,26 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
       <div className="max-w-7xl mx-auto flex space-x-1 sm:space-x-2 py-2">
         {tabs.map(tab => {
           const isActive = activeTab === tab.id;
-          const Icon = tab.icon;
-
+          const className = tabClass(isActive, tab.isSecondary);
+          const inner = (
+            <TabInner icon={tab.icon} label={tab.label} badge={tab.badge} isActive={isActive} muted={tab.id === 'calculator'} />
+          );
+          if (!onTabChange) {
+            return (
+              <Link key={tab.id} href={`/?tab=${tab.id}`} className={className}>
+                {inner}
+              </Link>
+            );
+          }
           return (
-            <button
-              key={tab.id}
-              onClick={() => onTabChange(tab.id)}
-              className={`flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-md text-xs sm:text-sm font-mono whitespace-nowrap transition-all duration-150 ${
-                isActive
-                  ? tab.id === 'calculator'
-                    ? 'bg-[#1a233a] text-slate-200 border border-slate-600 shadow-sm'
-                    : 'bg-[#0e172a] text-cyan-300 border border-cyan-500/50 shadow-neon-cyan'
-                  : tab.isSecondary
-                  ? 'text-slate-400 hover:text-slate-200 hover:bg-[#0d1424] opacity-80'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#0d1424]'
-              }`}
-            >
-              <Icon
-                className={`w-4 h-4 ${
-                  isActive
-                    ? tab.id === 'calculator'
-                      ? 'text-slate-300'
-                      : 'text-cyan-400'
-                    : 'text-slate-400'
-                }`}
-              />
-              <span className="font-medium">{tab.label}</span>
-              {tab.badge && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
-                    isActive
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                      : 'bg-[#141d2f] text-slate-400'
-                  }`}
-                >
-                  {tab.badge}
-                </span>
-              )}
+            <button key={tab.id} type="button" onClick={() => onTabChange(tab.id)} className={className}>
+              {inner}
             </button>
           );
         })}
+        <Link href="/chef" className={tabClass(activeTab === 'chef')}>
+          <TabInner icon={ChefHat} label="Chef" isActive={activeTab === 'chef'} />
+        </Link>
       </div>
     </nav>
   );

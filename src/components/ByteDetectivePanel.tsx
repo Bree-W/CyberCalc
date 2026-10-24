@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { InputFormat, ByteAnalysisResult } from '@/types/analysis';
 import { analyzeByteSequence } from '@/lib/byte-analysis';
 import ByteGrid from './ByteGrid';
+import type { ChefRecipeId } from '@/integrations/cyberchef.ts';
 import {
   Binary,
   Copy,
@@ -26,11 +27,13 @@ interface ByteDetectivePanelProps {
     resultSummary: string;
   }) => void;
   initialInput?: string;
+  onOpenInCyberChef?: (handoff: { recipe: ChefRecipeId; bytes: Uint8Array }) => void;
 }
 
 export default function ByteDetectivePanel({
   onLogHistory,
   initialInput = '4D 5A 90 00 03 00 00 00 04 00 00 00 FF FF 00 00',
+  onOpenInCyberChef,
 }: ByteDetectivePanelProps) {
   const [rawInput, setRawInput] = useState<string>(initialInput);
   const [format, setFormat] = useState<InputFormat>('auto');
@@ -199,6 +202,39 @@ export default function ByteDetectivePanel({
           >
             NOP Sled
           </button>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="font-mono text-[11px] text-slate-500">CyberChef:</span>
+          {(
+            [
+              ['from-hex', 'From Hex'],
+              ['magic', 'Magic'],
+              ['to-base64', 'To Base64'],
+            ] as const
+          ).map(([recipe, label]) => (
+            <button
+              key={recipe}
+              type="button"
+              data-testid={`chef-${recipe}`}
+              onClick={() => {
+                if (!onOpenInCyberChef) return;
+                const bytes = recipe === 'from-hex'
+                  ? new TextEncoder().encode(analysis.hexString || rawInput)
+                  : analysis.bytes;
+                onOpenInCyberChef({ recipe, bytes });
+                onLogHistory({
+                  tool: 'Byte Detective',
+                  operation: `Open in CyberChef (${label})`,
+                  inputSummary: rawInput.slice(0, 80),
+                  resultSummary: 'Opened the Integrations tab',
+                });
+              }}
+              className="rounded border border-[#202d4a] bg-[#101726] px-2 py-0.5 font-mono text-[11px] text-emerald-300"
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 

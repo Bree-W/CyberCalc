@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
-import Navigation, { ActiveTab } from '@/components/Navigation';
+import Navigation, { ActiveTab, isActiveTab } from '@/components/Navigation';
 import ByteDetectivePanel from '@/components/ByteDetectivePanel';
 import HashDetectivePanel from '@/components/HashDetectivePanel';
 import ConversionLab from '@/components/ConversionLab';
@@ -13,14 +14,19 @@ import StandardCalculator from '@/components/StandardCalculator';
 import FatalShutdownModal from '@/components/FatalShutdownModal';
 import TraceHistoryModal from '@/components/TraceHistoryModal';
 import QuickSamplesModal from '@/components/QuickSamplesModal';
+import IntegrationsPanel from '@/components/IntegrationsPanel';
+import { buildCyberChefUrl, chefWindowPath } from '@/integrations/index.ts';
+import AttributionDrawer from '@/components/AttributionDrawer';
 import { TraceHistoryItem } from '@/types/analysis';
 import { Check, ShieldCheck, Terminal } from 'lucide-react';
 
 export default function Home() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<ActiveTab>('byte-detective');
   const [history, setHistory] = useState<TraceHistoryItem[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [isSamplesOpen, setIsSamplesOpen] = useState<boolean>(false);
+  const [isNoticesOpen, setIsNoticesOpen] = useState<boolean>(false);
 
   // Easter Egg State
   const [isEasterEggActive, setIsEasterEggActive] = useState<boolean>(false);
@@ -83,12 +89,18 @@ export default function Home() {
     showToast('Workbench restored from reality division exception');
   };
 
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab && isActiveTab(tab)) setActiveTab(tab);
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#06090e] text-[#e6edf3] flex flex-col font-sans selection:bg-cyan-500 selection:text-black">
       {/* Top Header */}
       <Header
         onOpenHistory={() => setIsHistoryOpen(true)}
         onOpenSamples={() => setIsSamplesOpen(true)}
+        onOpenNotices={() => setIsNoticesOpen(true)}
         onReset={handleResetWorkbench}
         historyCount={history.length}
       />
@@ -111,6 +123,10 @@ export default function Home() {
           <ByteDetectivePanel
             initialInput={byteDetectiveInput}
             onLogHistory={handleLogHistory}
+            onOpenInCyberChef={handoff => {
+              const built = buildCyberChefUrl(handoff.recipe, handoff.bytes);
+              router.push(chefWindowPath(built.url));
+            }}
           />
         )}
 
@@ -149,6 +165,10 @@ export default function Home() {
             onLogHistory={handleLogHistory}
           />
         )}
+
+        {activeTab === 'integrations' && (
+          <IntegrationsPanel />
+        )}
       </main>
 
       {/* Footer */}
@@ -159,9 +179,9 @@ export default function Home() {
             <span>— Forensic &amp; Cryptographic Data Workbench</span>
           </div>
           <div className="flex items-center space-x-4 text-slate-400">
-            <span>100% Client-Side Engine</span>
+            <span>CyberChef stays in the browser</span>
             <span>•</span>
-            <span>Zero Backend Footprint</span>
+            <span>Aperi&apos;Solve stays on this machine</span>
           </div>
         </div>
       </footer>
@@ -195,6 +215,8 @@ export default function Home() {
         onClose={() => setIsSamplesOpen(false)}
         onSelectSample={handleSelectSample}
       />
+
+      <AttributionDrawer isOpen={isNoticesOpen} onClose={() => setIsNoticesOpen(false)} />
     </div>
   );
 }

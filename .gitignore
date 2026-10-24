@@ -1,3 +1,53 @@
+# ---- AI / Cursor generated scratch (keep local; promote keepers to docs/) ----
+docs/ai-scratch/
+*.scratch.md
+PLAN.scratch.md
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
+.cursor/mcp.json          # can hold API keys; never commit
+
+# ---- Secrets ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets/
+credentials*.json
+
+# ---- Dependencies & build output ----
 node_modules/
+dist/
+build/
 .next/
-tsconfig.tsbuildinfo
+coverage/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.log
+
+# ---- Security lab data (never commit real malware) ----
+samples/malicious/
+samples/**/*.exe
+samples/**/*.dll
+samples/**/*.elf
+*.pcap
+*.pcapng
+# Keep only small, benign test images/files
+!samples/benign/
+
+# ---- Vendored third-party tools (prefer submodule or pinned version instead) ----
+vendor/**/node_modules/
+vendor/**/build/
+
+# ---- OS / editor noise ----
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+
+# ---- Don't upload 2 other projects ---- #
+Combined_Repos/
