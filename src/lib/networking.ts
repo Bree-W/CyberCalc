@@ -257,35 +257,46 @@ export function decodeTcpFlags(flagByte: number): TcpFlagsDecoded {
   };
 }
 
-function numberToIpv6(address: bigint): string {
-  const hex = address.toString(16).padStart(32, '0');
-  const hextets = Array.from({ length: 8 }, (_, index) =>
-    parseInt(hex.slice(index * 4, index * 4 + 4), 16),
-  );
-
+function compressIpv6Hextets(padded: string[]): string {
+  const groups = padded.map(part => part.replace(/^0+/, '') || '0');
   let bestStart = -1;
-  let bestLength = 1;
-  for (let start = 0; start < hextets.length;) {
-    if (hextets[start] !== 0) {
-      start++;
+  let bestLen = 0;
+  let index = 0;
+  while (index < groups.length) {
+    if (groups[index] !== '0') {
+      index++;
       continue;
     }
-
-    let end = start;
-    while (end < hextets.length && hextets[end] === 0) end++;
-    if (end - start > bestLength) {
-      bestStart = start;
-      bestLength = end - start;
+    let end = index;
+    while (end < groups.length && groups[end] === '0') end++;
+    const run = end - index;
+    if (run > bestLen && run >= 2) {
+      bestStart = index;
+      bestLen = run;
     }
-    start = end;
+    index = end;
   }
 
-  if (bestStart === -1) return hextets.map(value => value.toString(16)).join(':');
-  const left = hextets.slice(0, bestStart).map(value => value.toString(16)).join(':');
-  const right = hextets.slice(bestStart + bestLength).map(value => value.toString(16)).join(':');
+  if (bestStart < 0) return groups.join(':');
+  const left = groups.slice(0, bestStart).join(':');
+  const right = groups.slice(bestStart + bestLen).join(':');
+  if (!left && !right) return '::';
+  if (!left) return `::${right}`;
+  if (!right) return `${left}::`;
   return `${left}::${right}`;
 }
 
+function ipv6Scope(first: number, expanded: string): string {
+  if (expanded === '0000:0000:0000:0000:0000:0000:0000:0001') return 'Loopback (::1/128)';
+  if (expanded === '0000:0000:0000:0000:0000:0000:0000:0000') return 'Unspecified (::/128)';
+  if ((first & 0xffc0) === 0xfe80) return 'Link-Local Unicast (fe80::/10)';
+  if ((first & 0xfe00) === 0xfc00) return 'Unique Local Address (fc00::/7 - IPv6 Private)';
+  if ((first & 0xff00) === 0xff00) return 'Multicast (ff00::/8)';
+  if ((first & 0xe000) === 0x2000) return 'Global Unicast (2000::/3)';
+  return 'Reserved / other';
+}
+
+// IPv6 expansion, RFC 5952 compression, and prefix range calculations.
 export function analyzeIpv6(ipv6Str: string, prefixInput: number | string = 64): {
   isValid: boolean;
   expanded?: string;
@@ -298,14 +309,23 @@ export function analyzeIpv6(ipv6Str: string, prefixInput: number | string = 64):
   totalAddresses?: bigint;
   error?: string;
 } {
-  const trimmed = ipv6Str.trim().toLowerCase();
+  let trimmed = ipv6Str.trim().toLowerCase();
   if (!trimmed) return { isValid: false, error: 'Empty IPv6 string.' };
   const prefix = typeof prefixInput === 'number' ? prefixInput : parseInt(prefixInput.toString(), 10);
   if (!Number.isInteger(prefix) || prefix < 0 || prefix > 128) {
     return { isValid: false, error: `Invalid IPv6 prefix /${prefix}. Expected an integer between 0 and 128.` };
   }
 
-  // Expand ::
+  const v4 = trimmed.match(/(?:^|:)((?:\d{1,3}\.){3}\d{1,3})$/);
+  if (v4) {
+    const octets = v4[1].split('.').map(part => Number(part));
+    if (octets.some(octet => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+      return { isValid: false, error: 'Invalid IPv4 tail in IPv6 address.' };
+    }
+    const hex = octets.map(octet => octet.toString(16).padStart(2, '0')).join('');
+    trimmed = trimmed.slice(0, trimmed.length - v4[1].length) + `${hex.slice(0, 4)}:${hex.slice(4)}`;
+  }
+
   let parts: string[];
   if (trimmed.includes('::')) {
     const halves = trimmed.split('::');
@@ -314,8 +334,7 @@ export function analyzeIpv6(ipv6Str: string, prefixInput: number | string = 64):
     const right = halves[1] ? halves[1].split(':') : [];
     const missing = 8 - (left.length + right.length);
     if (missing < 1) return { isValid: false, error: 'Invalid IPv6 group count.' };
-    const zeros = new Array(missing).fill('0000');
-    parts = [...left, ...zeros, ...right];
+    parts = [...left, ...new Array(missing).fill('0'), ...right];
   } else {
     parts = trimmed.split(':');
   }
@@ -324,41 +343,36 @@ export function analyzeIpv6(ipv6Str: string, prefixInput: number | string = 64):
     return { isValid: false, error: `Invalid IPv6: expected 8 hextets, got ${parts.length}.` };
   }
 
-  for (const p of parts) {
-    if (!/^[0-9a-f]{1,4}$/i.test(p)) {
-      return { isValid: false, error: `Invalid hextet "${p}".` };
+  for (const part of parts) {
+    if (!/^[0-9a-f]{1,4}$/.test(part)) {
+      return { isValid: false, error: `Invalid hextet "${part}".` };
     }
   }
 
-  const expanded = parts.map(p => p.padStart(4, '0')).join(':');
-  const address = BigInt(`0x${parts.map(part => part.padStart(4, '0')).join('')}`);
+  const padded = parts.map(part => part.padStart(4, '0'));
+  const expanded = padded.join(':');
+  const first = parseInt(padded[0], 16);
+  const address = BigInt(`0x${padded.join('')}`);
   const hostBits = BigInt(128 - prefix);
   const totalAddresses = 1n << hostBits;
   const networkAddress = (address >> hostBits) << hostBits;
   const lastAddress = networkAddress + totalAddresses - 1n;
-
-  let scope = 'Global Unicast';
-  if (expanded === '0000:0000:0000:0000:0000:0000:0000:0001') {
-    scope = 'Loopback (::1/128)';
-  } else if (expanded === '0000:0000:0000:0000:0000:0000:0000:0000') {
-    scope = 'Unspecified (::/128)';
-  } else if (expanded.startsWith('fe80:')) {
-    scope = 'Link-Local Unicast (fe80::/10)';
-  } else if (expanded.startsWith('fc') || expanded.startsWith('fd')) {
-    scope = 'Unique Local Address (fc00::/7 - IPv6 Private)';
-  } else if (expanded.startsWith('ff')) {
-    scope = 'Multicast (ff00::/8)';
-  }
+  const toIpv6 = (value: bigint) =>
+    compressIpv6Hextets(
+      Array.from({ length: 8 }, (_, index) =>
+        ((value >> BigInt((7 - index) * 16)) & 0xffffn).toString(16).padStart(4, '0'),
+      ),
+    );
 
   return {
     isValid: true,
     expanded,
-    compressed: numberToIpv6(address),
-    scope,
+    compressed: compressIpv6Hextets(padded),
+    scope: ipv6Scope(first, expanded),
     prefix,
-    networkAddress: numberToIpv6(networkAddress),
-    firstAddress: numberToIpv6(networkAddress),
-    lastAddress: numberToIpv6(lastAddress),
+    networkAddress: toIpv6(networkAddress),
+    firstAddress: toIpv6(networkAddress),
+    lastAddress: toIpv6(lastAddress),
     totalAddresses,
   };
 }

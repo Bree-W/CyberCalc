@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   BitwiseOp,
   computeBitwiseOperation,
@@ -21,16 +23,12 @@ import {
 } from 'lucide-react';
 
 interface BitwiseLabProps {
-  onLogHistory: (item: {
-    tool: 'Bitwise Operations';
-    operation: string;
-    inputSummary: string;
-    params?: string;
-    resultSummary: string;
-  }) => void;
+  onLogHistory: (item: HistoryEntry) => void;
+  loadRequest?: WorkbenchLoad | null;
+  resetId?: number;
 }
 
-export default function BitwiseLab({ onLogHistory }: BitwiseLabProps) {
+export default function BitwiseLab({ onLogHistory, loadRequest, resetId = 0 }: BitwiseLabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'bitwise' | 'repeating-xor' | 'single-key-bruteforce'>('repeating-xor');
 
   // Single Operation State
@@ -49,6 +47,34 @@ export default function BitwiseLab({ onLogHistory }: BitwiseLabProps) {
   const [bruteForceInput, setBruteForceInput] = useState<string>('');
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  useWorkbenchLoad(loadRequest, 'bitwise-lab', payload => {
+    if (payload.subtab === 'repeating-xor' || payload.subtab === 'single-key-bruteforce' || payload.subtab === 'bitwise') {
+      setActiveSubTab(payload.subtab);
+    }
+    if (payload.data != null) {
+      setXorDataInput(payload.data);
+      setXorDataType('hex');
+    }
+    if (payload.key != null) {
+      setXorKeyInput(payload.key);
+      setXorKeyType('hex');
+    }
+    if (payload.brute != null) {
+      setBruteForceInput(payload.brute);
+      setActiveSubTab('single-key-bruteforce');
+    }
+  });
+
+  useWorkbenchReset(resetId, () => {
+    setXorDataInput('');
+    setXorKeyInput('');
+    setXorDataType('hex');
+    setXorKeyType('hex');
+    setBruteForceInput('');
+    setOperandAStr('0');
+    setOperandBStr('0');
+  });
 
   // Helper parse BigInt from string
   const parseVal = (str: string): bigint => {

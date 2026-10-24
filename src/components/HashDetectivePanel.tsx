@@ -8,6 +8,8 @@ import {
   calculateWebCryptoHash,
   HashDetectionResult,
 } from '@/lib/hash-detective';
+import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   Hash,
   Search,
@@ -22,21 +24,24 @@ import {
 } from 'lucide-react';
 
 interface HashDetectivePanelProps {
-  onLogHistory: (item: {
-    tool: 'Hash Detective';
-    operation: string;
-    inputSummary: string;
-    params?: string;
-    resultSummary: string;
-  }) => void;
+  onLogHistory: (item: HistoryEntry) => void;
+  loadRequest?: WorkbenchLoad | null;
+  resetId?: number;
   initialHash?: string;
 }
 
 export default function HashDetectivePanel({
   onLogHistory,
+  loadRequest,
+  resetId = 0,
   initialHash = '',
 }: HashDetectivePanelProps) {
   const [hashInput, setHashInput] = useState<string>(initialHash);
+
+  useWorkbenchLoad(loadRequest, 'hash-detective', payload => {
+    if (payload.input != null) setHashInput(payload.input);
+  });
+  useWorkbenchReset(resetId, () => setHashInput(''));
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // Live Generator State

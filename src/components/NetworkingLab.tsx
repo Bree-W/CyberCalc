@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   calculateSubnet,
   decodeTcpFlags,
@@ -21,16 +23,12 @@ import {
 } from 'lucide-react';
 
 interface NetworkingLabProps {
-  onLogHistory: (item: {
-    tool: 'Networking';
-    operation: string;
-    inputSummary: string;
-    params?: string;
-    resultSummary: string;
-  }) => void;
+  onLogHistory: (item: HistoryEntry) => void;
+  loadRequest?: WorkbenchLoad | null;
+  resetId?: number;
 }
 
-export default function NetworkingLab({ onLogHistory }: NetworkingLabProps) {
+export default function NetworkingLab({ onLogHistory, loadRequest, resetId = 0 }: NetworkingLabProps) {
   const [activeSubTab, setActiveSubTab] = useState<'ipv4-cidr' | 'tcp-flags' | 'ipv6'>('ipv4-cidr');
 
   // IPv4 State
@@ -44,6 +42,30 @@ export default function NetworkingLab({ onLogHistory }: NetworkingLabProps) {
   // IPv6 State
   const [ipv6Input, setIpv6Input] = useState<string>('2001:db8::1');
   const [ipv6Prefix, setIpv6Prefix] = useState<number>(64);
+
+  useWorkbenchLoad(loadRequest, 'networking', payload => {
+    if (payload.subtab === 'ipv4-cidr' || payload.subtab === 'tcp-flags' || payload.subtab === 'ipv6') {
+      setActiveSubTab(payload.subtab);
+    }
+    if (payload.input != null) {
+      if (payload.subtab === 'ipv6') setIpv6Input(payload.input);
+      else setIpInput(payload.input);
+    }
+    if (payload.prefix != null && !Number.isNaN(Number(payload.prefix))) {
+      setCidrPrefix(Number(payload.prefix));
+    }
+    if (payload.flag != null && !Number.isNaN(Number(payload.flag))) {
+      setFlagByte(Number(payload.flag) & 0xff);
+    }
+  });
+
+  useWorkbenchReset(resetId, () => {
+    setActiveSubTab('ipv4-cidr');
+    setIpInput('192.168.1.100');
+    setCidrPrefix(24);
+    setFlagByte(0x02);
+    setIpv6Input('2001:db8::1');
+  });
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -76,6 +98,8 @@ export default function NetworkingLab({ onLogHistory }: NetworkingLabProps) {
       operation: 'Toggle TCP Flag',
       inputSummary: `0x${newByte.toString(16).padStart(2, '0').toUpperCase()}`,
       resultSummary: `Decoded TCP Flags: 0x${newByte.toString(16).toUpperCase()}`,
+      restoreTab: 'networking',
+      restore: { subtab: 'tcp-flags', flag: String(newByte) },
     });
   };
 
@@ -86,6 +110,8 @@ export default function NetworkingLab({ onLogHistory }: NetworkingLabProps) {
       operation: `Load TCP Probe Preset: ${label}`,
       inputSummary: `0x${byteVal.toString(16).padStart(2, '0').toUpperCase()}`,
       resultSummary: label,
+      restoreTab: 'networking',
+      restore: { subtab: 'tcp-flags', flag: String(byteVal) },
     });
   };
 

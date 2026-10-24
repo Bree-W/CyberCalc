@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { InputFormat, ByteAnalysisResult } from '@/types/analysis';
+import { InputFormat, ByteAnalysisResult, HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { AnalystAction, buildAnalystSummary } from '@/lib/analyst';
 import { analyzeByteSequence } from '@/lib/byte-analysis';
 import ByteGrid from './ByteGrid';
+import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   Binary,
   Copy,
@@ -11,33 +13,111 @@ import {
   Upload,
   AlertTriangle,
   Activity,
+  ArrowRight,
 } from 'lucide-react';
 
+const MAX_FILE_BYTES = 64 * 1024;
+const INPUT_FORMATS: InputFormat[] = ['auto', 'hex', 'binary', 'decimal', 'text', 'base64'];
+
 interface ByteDetectivePanelProps {
-  onLogHistory: (item: {
-    tool: 'Byte Detective';
-    operation: string;
-    inputSummary: string;
-    params?: string;
-    resultSummary: string;
-  }) => void;
+  onLogHistory: (item: HistoryEntry) => void;
+  onSendTo?: (target: 'bitwise-lab' | 'reverse-eng', hex: string) => void;
+  onApplyAnalyst?: (
+    action: Exclude<AnalystAction, 'none' | 'decode-base64'>,
+    hex: string,
+    text: string,
+  ) => void;
+  loadRequest?: WorkbenchLoad | null;
+  resetId?: number;
   initialInput?: string;
 }
 
 export default function ByteDetectivePanel({
   onLogHistory,
+  onSendTo,
+  onApplyAnalyst,
+  loadRequest,
+  resetId = 0,
   initialInput = '',
 }: ByteDetectivePanelProps) {
   const [rawInput, setRawInput] = useState<string>(initialInput);
   const [format, setFormat] = useState<InputFormat>('auto');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeViewTab, setActiveViewTab] = useState<'grid' | 'hex' | 'binary' | 'decimal' | 'utf8'>('grid');
+  const [fileNotice, setFileNotice] = useState<string | null>(null);
+  const [analystBusy, setAnalystBusy] = useState(false);
+  const [analystNote, setAnalystNote] = useState<string | null>(null);
+  const [analystModel, setAnalystModel] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Compute byte analysis
+  useWorkbenchLoad(loadRequest, 'byte-detective', payload => {
+    if (payload.input != null) setRawInput(payload.input);
+    if (INPUT_FORMATS.includes(payload.format as InputFormat)) {
+      setFormat(payload.format as InputFormat);
+    }
+    setFileNotice(null);
+  });
+
+  useWorkbenchReset(resetId, () => {
+    setRawInput('');
+    setFormat('auto');
+    setFileNotice(null);
+    setAnalystNote(null);
+    setAnalystModel(null);
+  });
+
   const analysis: ByteAnalysisResult = React.useMemo(() => {
     return analyzeByteSequence(rawInput, format);
   }, [rawInput, format]);
+
+  const askOpenModel = async () => {
+    if (analysis.totalBytes === 0 || analystBusy) return;
+    setAnalystBusy(true);
+    setAnalystNote(null);
+    try {
+      const summary = buildAnalystSummary(analysis);
+      const response = await fetch('/api/analyst', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(summary),
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        explanation?: string;
+        action?: AnalystAction;
+        model?: string;
+      };
+      if (!response.ok || !data.explanation || !data.action) {
+        setAnalystNote(data.error || 'The model request failed.');
+        return;
+      }
+      setAnalystModel(data.model || null);
+      setAnalystNote(data.explanation);
+      onLogHistory({
+        tool: 'Byte Detective',
+        operation: `Open model: ${data.action}`,
+        inputSummary: summary.hexPreview.slice(0, 48),
+        params: data.model,
+        resultSummary: data.explanation,
+        restoreTab: 'byte-detective',
+        restore: { input: rawInput, format },
+      });
+      if (data.action === 'decode-base64') {
+        const text = analysis.utf8String.trim();
+        if (/^[A-Za-z0-9+/=\s]+$/.test(text) && text.length >= 8) {
+          setFormat('base64');
+          setRawInput(text);
+        }
+      } else if (data.action !== 'none') {
+        const hex = analysis.hexString.split(/\s+/).slice(0, 1024).join(' ');
+        onApplyAnalyst?.(data.action, hex, analysis.utf8String.trim().slice(0, 200));
+      }
+    } catch {
+      setAnalystNote('The model request could not be completed.');
+    } finally {
+      setAnalystBusy(false);
+    }
+  };
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -48,27 +128,28 @@ export default function ByteDetectivePanel({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = () => {
-      const arrayBuffer = reader.result as ArrayBuffer;
-      const bytes = new Uint8Array(arrayBuffer);
-      // Format as hex string with spaces
-      const hex = Array.from(bytes)
-        .map(b => b.toString(16).padStart(2, '0').toUpperCase())
-        .join(' ');
+      const allBytes = new Uint8Array(reader.result as ArrayBuffer);
+      const bytes = allBytes.slice(0, MAX_FILE_BYTES);
+      const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0').toUpperCase()).join(' ');
       setFormat('hex');
       setRawInput(hex);
-
+      setFileNotice(allBytes.length > MAX_FILE_BYTES
+        ? `Showing the first ${MAX_FILE_BYTES.toLocaleString()} bytes of ${file.name} (${allBytes.length.toLocaleString()} bytes).`
+        : null);
       onLogHistory({
         tool: 'Byte Detective',
         operation: 'Inspect Uploaded File',
         inputSummary: `${file.name} (${file.size} bytes)`,
         params: 'Format: Raw Binary File',
         resultSummary: `${bytes.length} bytes loaded into Byte Detective`,
+        restoreTab: 'byte-detective',
+        restore: { input: hex, format: 'hex' },
       });
     };
     reader.readAsArrayBuffer(file);
+    e.target.value = '';
   };
 
   return (
@@ -140,12 +221,43 @@ export default function ByteDetectivePanel({
         </div>
 
         {/* Ambiguity or Format Warning Notice */}
-        {analysis.parseWarning && (
+        {(analysis.parseWarning || fileNotice) && (
           <div className="mt-2 flex items-start space-x-2 text-xs font-mono text-amber-300 bg-amber-950/30 border border-amber-800/40 p-2.5 rounded-lg">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <span>{analysis.parseWarning}</span>
+            <span>{[fileNotice, analysis.parseWarning].filter(Boolean).join(' ')}</span>
           </div>
         )}
+
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#162035] pt-3">
+          <button
+            disabled={analysis.totalBytes === 0}
+            onClick={() => onSendTo?.('bitwise-lab', analysis.hexString)}
+            className="flex items-center gap-1.5 border border-[#233355] bg-[#101726] px-2.5 py-1.5 text-xs font-mono text-emerald-300 disabled:opacity-40"
+          >
+            <ArrowRight className="h-3.5 w-3.5" />
+            Send to XOR
+          </button>
+          <button
+            disabled={analysis.totalBytes === 0}
+            onClick={() => onSendTo?.('reverse-eng', analysis.hexString)}
+            className="flex items-center gap-1.5 border border-[#233355] bg-[#101726] px-2.5 py-1.5 text-xs font-mono text-emerald-300 disabled:opacity-40"
+          >
+            <ArrowRight className="h-3.5 w-3.5" />
+            Send to endianness
+          </button>
+          <button
+            disabled={analysis.totalBytes === 0 || analystBusy}
+            onClick={askOpenModel}
+            className="ml-auto border border-cyan-500/40 bg-cyan-500/15 px-3 py-1.5 text-xs font-mono text-cyan-200 disabled:opacity-40"
+          >
+            {analystBusy ? 'Asking the model…' : 'Ask the open model'}
+          </button>
+          <p className="w-full text-[11px] font-mono text-slate-500">
+            Optional: sends a short analysis summary to DigitalOcean only when you choose this.
+            {analystModel ? ` Model: ${analystModel}.` : ''}
+          </p>
+          {analystNote && <p role="status" className="w-full text-xs font-mono text-slate-200">{analystNote}</p>}
+        </div>
 
       </div>
 

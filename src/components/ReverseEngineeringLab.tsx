@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
+import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   analyzeEndianness,
   compareByteSequences,
@@ -23,17 +25,15 @@ import {
 const MAX_DIFF_FILE_SIZE = 1024 * 1024;
 
 interface ReverseEngineeringLabProps {
-  onLogHistory: (item: {
-    tool: 'Reverse Engineering';
-    operation: string;
-    inputSummary: string;
-    params?: string;
-    resultSummary: string;
-  }) => void;
+  onLogHistory: (item: HistoryEntry) => void;
+  loadRequest?: WorkbenchLoad | null;
+  resetId?: number;
 }
 
 export default function ReverseEngineeringLab({
   onLogHistory,
+  loadRequest,
+  resetId = 0,
 }: ReverseEngineeringLabProps) {
   const [activeTab, setActiveTab] = useState<'endianness' | 'diff' | 'signatures'>('endianness');
 
@@ -51,6 +51,23 @@ export default function ReverseEngineeringLab({
   const [signatureSearch, setSignatureSearch] = useState<string>('');
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  useWorkbenchLoad(loadRequest, 'reverse-eng', payload => {
+    if (payload.subtab === 'endianness' || payload.subtab === 'diff' || payload.subtab === 'signatures') {
+      setActiveTab(payload.subtab);
+    }
+    if (payload.input != null) setEndianInput(payload.input);
+    if (payload.inputA != null) setDiffInputA(payload.inputA);
+    if (payload.inputB != null) setDiffInputB(payload.inputB);
+  });
+
+  useWorkbenchReset(resetId, () => {
+    setEndianInput('');
+    setDiffInputA('');
+    setDiffInputB('');
+    setDiffFileError(null);
+    setSignatureSearch('');
+  });
 
   // Compute Endianness
   const endianAnalysis: EndianAnalysisResult = React.useMemo(() => {
