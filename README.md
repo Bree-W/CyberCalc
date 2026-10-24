@@ -185,5 +185,14 @@ The model is [`openai-gpt-oss-20b`](https://huggingface.co/openai/gpt-oss-20b), 
 
 ---
 
+## Contributors
+
+- Brianna Walter
+- Jack Burnet
+- Gideon Prisk
+- Duong Tren
+
+---
+
 ## 📜 License
 [MIT License](LICENSE). Built for cybersecurity education, digital forensics research, and CTF competitions.
