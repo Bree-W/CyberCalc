@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import React, { useRef, useState } from 'react';
 import Header from '@/components/Header';
 import Navigation, { ActiveTab, isActiveTab } from '@/components/Navigation';
 import ByteDetectivePanel from '@/components/ByteDetectivePanel';
@@ -18,8 +17,6 @@ import QuickSamplesModal from '@/components/QuickSamplesModal';
 import IntegrationsPanel from '@/components/IntegrationsPanel';
 import { buildCyberChefUrl, chefWindowPath } from '@/integrations/index.ts';
 import AttributionDrawer from '@/components/AttributionDrawer';
-import { TraceHistoryItem } from '@/types/analysis';
-import { Check, ShieldCheck, Terminal } from 'lucide-react';
 import { TraceHistoryItem, WorkbenchLoad } from '@/types/analysis';
 import { AnalystAction } from '@/lib/analyst';
 import { Check } from 'lucide-react';
@@ -190,11 +187,9 @@ export default function Home() {
             onTriggerEasterEgg={handleTriggerEasterEgg}
             onLogHistory={handleLogHistory}
           />
-        )}
-
-        {activeTab === 'integrations' && (
+        </div>
+        <div className={activeTab === 'integrations' ? undefined : 'hidden'}>
           <IntegrationsPanel />
-        )}
         </div>
       </main>
 
@@ -206,10 +201,9 @@ export default function Home() {
             <span>— Forensic &amp; Cryptographic Data Workbench</span>
           </div>
           <div className="flex items-center space-x-4 text-slate-400">
-            <span>CyberChef stays in the browser</span>
+            <span>Labs &amp; CyberChef stay in the browser</span>
             <span>•</span>
-            <span>Aperi&apos;Solve stays on this machine</span>
-            <span>Labs run locally</span>
+            <span>Aperi&apos;Solve runs locally</span>
             <span>•</span>
             <span>Open model is opt-in</span>
           </div>

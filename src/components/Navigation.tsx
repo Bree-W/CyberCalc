@@ -16,15 +16,7 @@ import {
 } from 'lucide-react';
 import { WorkbenchTab } from '@/types/analysis';
 
-export type ActiveTab =
-  | 'byte-detective'
-  | 'hash-detective'
-  | 'conversion-lab'
-  | 'bitwise-lab'
-  | 'reverse-eng'
-  | 'networking'
-  | 'calculator'
-  | 'integrations';
+export type ActiveTab = WorkbenchTab;
 
 const TAB_IDS: ActiveTab[] = [
   'byte-detective',
@@ -40,7 +32,6 @@ const TAB_IDS: ActiveTab[] = [
 export function isActiveTab(value: string): value is ActiveTab {
   return (TAB_IDS as string[]).includes(value);
 }
-export type ActiveTab = WorkbenchTab;
 
 interface NavigationProps {
   activeTab: ActiveTab | 'chef' | 'aperi';
