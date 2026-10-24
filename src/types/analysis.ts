@@ -1,5 +1,21 @@
 export type InputFormat = 'auto' | 'hex' | 'binary' | 'decimal' | 'text' | 'base64';
 
+export type WorkbenchTab =
+  | 'byte-detective'
+  | 'hash-detective'
+  | 'conversion-lab'
+  | 'bitwise-lab'
+  | 'reverse-eng'
+  | 'networking'
+  | 'calculator';
+
+/** A one-shot instruction that loads data into a lab without remounting it. */
+export interface WorkbenchLoad {
+  id: number;
+  tab: WorkbenchTab;
+  payload: Record<string, string>;
+}
+
 export interface ByteInfo {
   offset: number;
   hex: string;
@@ -70,4 +86,10 @@ export interface TraceHistoryItem {
   inputSummary: string;
   params?: string;
   resultSummary: string;
+  /** Lab to open when this row is reloaded. */
+  restoreTab?: WorkbenchTab;
+  /** Field values handed to that lab. The summary above can stay short. */
+  restore?: Record<string, string>;
 }
+
+export type HistoryEntry = Omit<TraceHistoryItem, 'id' | 'timestamp'>;

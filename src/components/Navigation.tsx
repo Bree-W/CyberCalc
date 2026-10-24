@@ -10,15 +10,9 @@ import {
   Network,
   Calculator,
 } from 'lucide-react';
+import { WorkbenchTab } from '@/types/analysis';
 
-export type ActiveTab =
-  | 'byte-detective'
-  | 'hash-detective'
-  | 'conversion-lab'
-  | 'bitwise-lab'
-  | 'reverse-eng'
-  | 'networking'
-  | 'calculator';
+export type ActiveTab = WorkbenchTab;
 
 interface NavigationProps {
   activeTab: ActiveTab;

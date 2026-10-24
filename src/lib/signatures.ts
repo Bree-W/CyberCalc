@@ -1,4 +1,4 @@
-import { SignatureMatch } from '../types/analysis';
+import type { SignatureMatch } from '../types/analysis';
 
 export interface SignatureDefinition {
   name: string;
@@ -6,6 +6,10 @@ export interface SignatureDefinition {
   mime: string;
   magic: number[];
   offset?: number; // expected start offset, default 0
+  /** Extra bytes that must match, counted from the start of `magic`. */
+  companion?: { offset: number; bytes: number[] };
+  /** Search past offset 0. Short magics leave this off so "BM" does not match inside unrelated data. */
+  allowEmbedded?: boolean;
   minBytesForPartial?: number;
   description: string;
 }
@@ -16,6 +20,7 @@ export const SIGNATURE_DATABASE: SignatureDefinition[] = [
     extension: '.exe / .dll / .sys',
     mime: 'application/x-msdownload',
     magic: [0x4d, 0x5a],
+    allowEmbedded: false,
     minBytesForPartial: 2,
     description: 'DOS MZ executable header used by MS-DOS, Windows Portable Executable (PE), and OS/2 binaries.',
   },
@@ -104,6 +109,7 @@ export const SIGNATURE_DATABASE: SignatureDefinition[] = [
     extension: '.gz / .tar.gz',
     mime: 'application/gzip',
     magic: [0x1f, 0x8b],
+    allowEmbedded: false,
     minBytesForPartial: 2,
     description: 'GNU Zip compressed file container using DEFLATE compression algorithm.',
   },
@@ -132,12 +138,31 @@ export const SIGNATURE_DATABASE: SignatureDefinition[] = [
     description: 'Legacy WinRAR archive version 4.x and earlier ("Rar!\\x1A\\x07\\x00").',
   },
   {
-    name: 'WebP Image (RIFF Container)',
+    name: 'WebP Image (RIFF/WEBP)',
     extension: '.webp',
     mime: 'image/webp',
-    magic: [0x52, 0x49, 0x46, 0x46], // RIFF
-    minBytesForPartial: 4,
-    description: 'Resource Interchange File Format (RIFF) container used for WebP images and WAV audio.',
+    magic: [0x52, 0x49, 0x46, 0x46],
+    companion: { offset: 8, bytes: [0x57, 0x45, 0x42, 0x50] },
+    minBytesForPartial: 12,
+    description: 'RIFF container whose form type at offset 8 is "WEBP". WAV and AVI share the RIFF prefix and are matched separately.',
+  },
+  {
+    name: 'WAV Audio (RIFF/WAVE)',
+    extension: '.wav',
+    mime: 'audio/wav',
+    magic: [0x52, 0x49, 0x46, 0x46],
+    companion: { offset: 8, bytes: [0x57, 0x41, 0x56, 0x45] },
+    minBytesForPartial: 12,
+    description: 'RIFF container whose form type at offset 8 is "WAVE".',
+  },
+  {
+    name: 'AVI Video (RIFF/AVI)',
+    extension: '.avi',
+    mime: 'video/avi',
+    magic: [0x52, 0x49, 0x46, 0x46],
+    companion: { offset: 8, bytes: [0x41, 0x56, 0x49, 0x20] },
+    minBytesForPartial: 12,
+    description: 'RIFF container whose form type at offset 8 is "AVI ".',
   },
   {
     name: 'WebM / Matroska Video',
@@ -192,8 +217,9 @@ export const SIGNATURE_DATABASE: SignatureDefinition[] = [
     extension: '.bmp',
     mime: 'image/bmp',
     magic: [0x42, 0x4d],
+    allowEmbedded: false,
     minBytesForPartial: 2,
-    description: 'Device Independent Bitmap (DIB / BMP) magic signature ("BM").',
+    description: 'Device Independent Bitmap (DIB / BMP) magic signature ("BM"). Matched only at the start of the buffer.',
   },
   {
     name: 'TIFF Image (Little Endian)',
@@ -215,9 +241,9 @@ export const SIGNATURE_DATABASE: SignatureDefinition[] = [
     name: 'x86 Shellcode NOP Sled',
     extension: 'shellcode',
     mime: 'application/octet-stream',
-    magic: [0x90, 0x90, 0x90, 0x90],
-    minBytesForPartial: 4,
-    description: 'Repeated x86 NOP (No-Operation 0x90) instruction sequence commonly found in exploit payloads and shellcode sleds.',
+    magic: [0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90, 0x90],
+    minBytesForPartial: 8,
+    description: 'Eight consecutive x86 NOP (0x90) instructions. Shorter runs are left to the repeated-byte heuristic so ordinary padding is not called shellcode.',
   },
   {
     name: 'XML Document',
@@ -240,6 +266,23 @@ export const SIGNATURE_DATABASE: SignatureDefinition[] = [
 const SIGNATURE_DISCLAIMER =
   'IMPORTANT FORENSIC NOTE: A file signature (magic byte) match identifies a known header sequence at this offset, but does NOT verify that the remainder of the data is uncorrupted, complete, or benign. Malware commonly spoofs headers or embeds polyglot payloads.';
 
+function regionMatches(bytes: Uint8Array, offset: number, magic: number[]): boolean {
+  if (offset < 0 || offset + magic.length > bytes.length) return false;
+  for (let i = 0; i < magic.length; i++) {
+    if (bytes[offset + i] !== magic[i]) return false;
+  }
+  return true;
+}
+
+function companionMatches(bytes: Uint8Array, base: number, sig: SignatureDefinition): boolean {
+  if (!sig.companion) return true;
+  return regionMatches(bytes, base + sig.companion.offset, sig.companion.bytes);
+}
+
+function matchedHex(bytes: number[]): string {
+  return bytes.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+}
+
 export function detectSignatures(bytes: Uint8Array): SignatureMatch[] {
   if (bytes.length === 0) return [];
 
@@ -247,38 +290,34 @@ export function detectSignatures(bytes: Uint8Array): SignatureMatch[] {
 
   for (const sig of SIGNATURE_DATABASE) {
     const expectedOffset = sig.offset ?? 0;
-    
-    // Check for exact match at expected offset
-    if (bytes.length >= expectedOffset + sig.magic.length) {
-      let isMatch = true;
-      for (let i = 0; i < sig.magic.length; i++) {
-        if (bytes[expectedOffset + i] !== sig.magic[i]) {
-          isMatch = false;
-          break;
-        }
-      }
+    const fullLength = sig.companion
+      ? Math.max(sig.magic.length, sig.companion.offset + sig.companion.bytes.length)
+      : sig.magic.length;
+    const allowEmbedded = sig.allowEmbedded ?? sig.magic.length >= 4;
 
-      if (isMatch) {
-        matches.push({
-          name: sig.name,
-          extension: sig.extension,
-          mime: sig.mime,
-          offset: expectedOffset,
-          confidence: 'exact',
-          matchedHex: sig.magic.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' '),
-          description: sig.description,
-          disclaimer: SIGNATURE_DISCLAIMER,
-        });
-        continue;
-      }
+    if (regionMatches(bytes, expectedOffset, sig.magic) && companionMatches(bytes, expectedOffset, sig)) {
+      const shown = sig.companion ? [...sig.magic, ...sig.companion.bytes] : sig.magic;
+      matches.push({
+        name: sig.name,
+        extension: sig.extension,
+        mime: sig.mime,
+        offset: expectedOffset,
+        confidence: 'exact',
+        matchedHex: matchedHex(shown),
+        description: sig.description,
+        disclaimer: SIGNATURE_DISCLAIMER,
+      });
+      continue;
     }
 
-    // Check for partial match if bytes is shorter than full magic but meets minBytesForPartial
+    // Partial only when the buffer is shorter than the signature and has no companion
+    // that still needs later bytes (RIFF alone is not a WebP).
     const minBytes = sig.minBytesForPartial ?? sig.magic.length;
-    if (bytes.length >= expectedOffset + minBytes && bytes.length < expectedOffset + sig.magic.length) {
-      let isPartial = true;
+    const endOfKnown = expectedOffset + fullLength;
+    if (!sig.companion && bytes.length >= expectedOffset + minBytes && bytes.length < endOfKnown) {
       const available = bytes.length - expectedOffset;
-      for (let i = 0; i < available; i++) {
+      let isPartial = true;
+      for (let i = 0; i < available && i < sig.magic.length; i++) {
         if (bytes[expectedOffset + i] !== sig.magic[i]) {
           isPartial = false;
           break;
@@ -291,9 +330,7 @@ export function detectSignatures(bytes: Uint8Array): SignatureMatch[] {
           mime: sig.mime,
           offset: expectedOffset,
           confidence: 'partial',
-          matchedHex: Array.from(bytes.slice(expectedOffset, expectedOffset + available))
-            .map(b => b.toString(16).padStart(2, '0').toUpperCase())
-            .join(' '),
+          matchedHex: matchedHex(Array.from(bytes.slice(expectedOffset, expectedOffset + available))),
           description: `${sig.description} Note: Only ${available} of ${sig.magic.length} signature bytes are present in input.`,
           disclaimer: SIGNATURE_DISCLAIMER,
         });
@@ -301,30 +338,23 @@ export function detectSignatures(bytes: Uint8Array): SignatureMatch[] {
       }
     }
 
-    // Check for embedded signature within first 512 bytes (common in carved files / dumps)
-    if (expectedOffset === 0 && bytes.length > sig.magic.length && bytes.length <= 4096) {
-      for (let searchOffset = 1; searchOffset <= Math.min(bytes.length - sig.magic.length, 256); searchOffset++) {
-        let isEmbedded = true;
-        for (let i = 0; i < sig.magic.length; i++) {
-          if (bytes[searchOffset + i] !== sig.magic[i]) {
-            isEmbedded = false;
-            break;
-          }
-        }
-        if (isEmbedded) {
-          matches.push({
-            name: `${sig.name} (Embedded at offset 0x${searchOffset.toString(16).toUpperCase()})`,
-            extension: sig.extension,
-            mime: sig.mime,
-            offset: searchOffset,
-            confidence: 'partial',
-            matchedHex: sig.magic.map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' '),
-            description: `${sig.description} [Discovered embedded inside the stream at offset +${searchOffset} bytes]`,
-            disclaimer: SIGNATURE_DISCLAIMER,
-          });
-          break;
-        }
-      }
+    if (!allowEmbedded || expectedOffset !== 0 || bytes.length > 4096) continue;
+
+    const scanEnd = Math.min(bytes.length - fullLength, 256);
+    for (let searchOffset = 1; searchOffset <= scanEnd; searchOffset++) {
+      if (!regionMatches(bytes, searchOffset, sig.magic)) continue;
+      if (!companionMatches(bytes, searchOffset, sig)) continue;
+      matches.push({
+        name: `${sig.name} (Embedded at offset 0x${searchOffset.toString(16).toUpperCase()})`,
+        extension: sig.extension,
+        mime: sig.mime,
+        offset: searchOffset,
+        confidence: 'partial',
+        matchedHex: matchedHex(sig.magic),
+        description: `${sig.description} [Discovered embedded inside the stream at offset +${searchOffset} bytes]`,
+        disclaimer: SIGNATURE_DISCLAIMER,
+      });
+      break;
     }
   }
 

@@ -8,6 +8,8 @@ import {
   calculateWebCryptoHash,
   HashDetectionResult,
 } from '@/lib/hash-detective';
+import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   Hash,
   Search,
@@ -23,21 +25,24 @@ import {
 } from 'lucide-react';
 
 interface HashDetectivePanelProps {
-  onLogHistory: (item: {
-    tool: 'Hash Detective';
-    operation: string;
-    inputSummary: string;
-    params?: string;
-    resultSummary: string;
-  }) => void;
+  onLogHistory: (item: HistoryEntry) => void;
+  loadRequest?: WorkbenchLoad | null;
+  resetId?: number;
   initialHash?: string;
 }
 
 export default function HashDetectivePanel({
   onLogHistory,
+  loadRequest,
+  resetId = 0,
   initialHash = '5d41402abc4b2a76b9719d911017c592',
 }: HashDetectivePanelProps) {
   const [hashInput, setHashInput] = useState<string>(initialHash);
+
+  useWorkbenchLoad(loadRequest, 'hash-detective', payload => {
+    if (payload.input != null) setHashInput(payload.input);
+  });
+  useWorkbenchReset(resetId, () => setHashInput(''));
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // Live Generator State
@@ -89,8 +94,10 @@ export default function HashDetectivePanel({
     onLogHistory({
       tool: 'Hash Detective',
       operation: `Analyze Sample: ${label}`,
-      inputSummary: sample.slice(0, 24) + '...',
+      inputSummary: sample.length > 48 ? sample.slice(0, 48) + '…' : sample,
       resultSummary: `Identified hash candidates for ${label}`,
+      restoreTab: 'hash-detective',
+      restore: { input: sample },
     });
   };
 

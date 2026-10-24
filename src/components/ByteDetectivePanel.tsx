@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { InputFormat, ByteAnalysisResult } from '@/types/analysis';
+import { InputFormat, ByteAnalysisResult, HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { AnalystAction, buildAnalystSummary } from '@/lib/analyst';
 import { analyzeByteSequence } from '@/lib/byte-analysis';
 import ByteGrid from './ByteGrid';
+import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   Binary,
   Copy,
@@ -17,31 +19,107 @@ import {
   Info,
 } from 'lucide-react';
 
+const MAX_FILE_BYTES = 64 * 1024;
+const INPUT_FORMATS: InputFormat[] = ['auto', 'hex', 'binary', 'decimal', 'text', 'base64'];
+
 interface ByteDetectivePanelProps {
-  onLogHistory: (item: {
-    tool: 'Byte Detective';
-    operation: string;
-    inputSummary: string;
-    params?: string;
-    resultSummary: string;
-  }) => void;
+  onLogHistory: (item: HistoryEntry) => void;
+  onSendTo?: (target: 'bitwise-lab' | 'reverse-eng', hex: string) => void;
+  onApplyAnalyst?: (action: Exclude<AnalystAction, 'none' | 'decode-base64'>, hex: string, text: string) => void;
+  loadRequest?: WorkbenchLoad | null;
+  resetId?: number;
   initialInput?: string;
 }
 
 export default function ByteDetectivePanel({
   onLogHistory,
+  onSendTo,
+  onApplyAnalyst,
+  loadRequest,
+  resetId = 0,
   initialInput = '4D 5A 90 00 03 00 00 00 04 00 00 00 FF FF 00 00',
 }: ByteDetectivePanelProps) {
   const [rawInput, setRawInput] = useState<string>(initialInput);
   const [format, setFormat] = useState<InputFormat>('auto');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeViewTab, setActiveViewTab] = useState<'grid' | 'hex' | 'binary' | 'decimal' | 'utf8'>('grid');
+  const [fileNotice, setFileNotice] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [analystBusy, setAnalystBusy] = useState(false);
+  const [analystNote, setAnalystNote] = useState<string | null>(null);
+  const [analystModel, setAnalystModel] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Compute byte analysis
+  useWorkbenchLoad(loadRequest, 'byte-detective', payload => {
+    if (payload.input != null) setRawInput(payload.input);
+    if (INPUT_FORMATS.includes(payload.format as InputFormat)) {
+      setFormat(payload.format as InputFormat);
+    }
+    setFileNotice(null);
+  });
+
+  useWorkbenchReset(resetId, () => {
+    setRawInput('');
+    setFormat('auto');
+    setFileNotice(null);
+    setAnalystNote(null);
+    setAnalystModel(null);
+  });
+
   const analysis: ByteAnalysisResult = React.useMemo(() => {
     return analyzeByteSequence(rawInput, format);
   }, [rawInput, format]);
+
+  const askOpenModel = async () => {
+    if (analysis.totalBytes === 0 || analystBusy) return;
+    setAnalystBusy(true);
+    setAnalystNote(null);
+    try {
+      const summary = buildAnalystSummary(analysis);
+      const response = await fetch('/api/analyst', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(summary),
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        explanation?: string;
+        action?: AnalystAction;
+        model?: string;
+      };
+      if (!response.ok || !data.explanation || !data.action) {
+        setAnalystNote(data.error || 'The model request failed.');
+        return;
+      }
+      setAnalystModel(data.model || null);
+      setAnalystNote(data.explanation);
+      onLogHistory({
+        tool: 'Byte Detective',
+        operation: `Open model: ${data.action}`,
+        inputSummary: summary.hexPreview.slice(0, 48),
+        params: data.model,
+        resultSummary: data.explanation,
+        restoreTab: 'byte-detective',
+        restore: { input: rawInput, format },
+      });
+      if (data.action === 'decode-base64') {
+        const text = analysis.utf8String.trim();
+        if (/^[A-Za-z0-9+/=\s]+$/.test(text) && text.length >= 8) {
+          setFormat('base64');
+          setRawInput(text);
+        }
+        return;
+      }
+      if (data.action !== 'none') {
+        const hex = analysis.hexString.split(/\s+/).slice(0, 1024).join(' ');
+        onApplyAnalyst?.(data.action, hex, analysis.utf8String.trim().slice(0, 200));
+      }
+    } catch {
+      setAnalystNote('The model request could not be completed.');
+    } finally {
+      setAnalystBusy(false);
+    }
+  };
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -49,41 +127,57 @@ export default function ByteDetectivePanel({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const readFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const arrayBuffer = reader.result as ArrayBuffer;
-      const bytes = new Uint8Array(arrayBuffer);
-      // Format as hex string with spaces
+      const all = new Uint8Array(reader.result as ArrayBuffer);
+      const truncated = all.length > MAX_FILE_BYTES;
+      const bytes = truncated ? all.slice(0, MAX_FILE_BYTES) : all;
       const hex = Array.from(bytes)
         .map(b => b.toString(16).padStart(2, '0').toUpperCase())
         .join(' ');
       setFormat('hex');
       setRawInput(hex);
+      setFileNotice(
+        truncated
+          ? `Showing the first ${MAX_FILE_BYTES.toLocaleString()} bytes of ${file.name} (${all.length.toLocaleString()} bytes).`
+          : null
+      );
 
       onLogHistory({
         tool: 'Byte Detective',
         operation: 'Inspect Uploaded File',
-        inputSummary: `${file.name} (${file.size} bytes)`,
+        inputSummary: truncated
+          ? `${file.name} (first 64 KB of ${file.size} bytes)`
+          : `${file.name} (${file.size} bytes)`,
         params: 'Format: Raw Binary File',
         resultSummary: `${bytes.length} bytes loaded into Byte Detective`,
+        restoreTab: 'byte-detective',
+        restore: { input: hex, format: 'hex' },
       });
     };
     reader.readAsArrayBuffer(file);
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    readFile(file);
+    e.target.value = '';
+  };
+
   const loadSample = (name: string, data: string, fmt: InputFormat) => {
     setFormat(fmt);
     setRawInput(data);
+    setFileNotice(null);
     onLogHistory({
       tool: 'Byte Detective',
       operation: `Load Sample: ${name}`,
-      inputSummary: data.slice(0, 30) + '...',
+      inputSummary: data.length > 48 ? data.slice(0, 48) + '…' : data,
       params: `Format: ${fmt}`,
       resultSummary: `Analyzed ${name}`,
+      restoreTab: 'byte-detective',
+      restore: { input: data, format: fmt },
     });
   };
 
@@ -127,11 +221,27 @@ export default function ByteDetectivePanel({
         </div>
 
         {/* Textarea */}
-        <div className="relative">
+        <div
+          className={`relative rounded-lg ${dragOver ? 'ring-2 ring-cyan-400' : ''}`}
+          onDragOver={e => {
+            e.preventDefault();
+            setDragOver(true);
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => {
+            e.preventDefault();
+            setDragOver(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) readFile(file);
+          }}
+        >
           <textarea
             value={rawInput}
-            onChange={e => setRawInput(e.target.value)}
-            placeholder="Paste hexadecimal bytes (e.g. 48 65 6c 6c 6f or 4D 5A), binary (01001000), decimal numbers, or plain text..."
+            onChange={e => {
+              setRawInput(e.target.value);
+              setFileNotice(null);
+            }}
+            placeholder="Paste hexadecimal bytes, or drop a file here (first 64 KB)..."
             rows={4}
             className="w-full bg-[#070b14] border border-[#1a2640] focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-lg p-3 font-mono text-xs sm:text-sm text-cyan-200 placeholder:text-slate-600 outline-none resize-y"
           />
@@ -156,10 +266,10 @@ export default function ByteDetectivePanel({
         </div>
 
         {/* Ambiguity or Format Warning Notice */}
-        {analysis.parseWarning && (
+        {(analysis.parseWarning || fileNotice) && (
           <div className="mt-2 flex items-start space-x-2 text-xs font-mono text-amber-300 bg-amber-950/30 border border-amber-800/40 p-2.5 rounded-lg">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <span>{analysis.parseWarning}</span>
+            <span>{[fileNotice, analysis.parseWarning].filter(Boolean).join(' ')}</span>
           </div>
         )}
 
@@ -199,6 +309,41 @@ export default function ByteDetectivePanel({
           >
             NOP Sled
           </button>
+          <button
+            disabled={analysis.totalBytes === 0}
+            onClick={() => onSendTo?.('bitwise-lab', analysis.hexString)}
+            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-emerald-300 disabled:opacity-40"
+          >
+            Send to XOR
+          </button>
+          <button
+            disabled={analysis.totalBytes === 0}
+            onClick={() => onSendTo?.('reverse-eng', analysis.hexString)}
+            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-emerald-300 disabled:opacity-40"
+          >
+            Send to endianness
+          </button>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 rounded-lg border border-[#1a253e] bg-[#070b14] p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              disabled={analysis.totalBytes === 0 || analystBusy}
+              onClick={askOpenModel}
+              className="px-3 py-1.5 rounded text-xs font-mono bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-200 disabled:opacity-40"
+            >
+              {analystBusy ? 'Asking the model…' : 'Ask the open model'}
+            </button>
+            <span className="text-[11px] font-mono text-slate-500">
+              {analystModel ? analystModel : 'openai-gpt-oss-20b'} · summary only
+            </span>
+          </div>
+          <p className="text-[11px] font-mono text-slate-500 leading-relaxed">
+            Sends entropy, signatures, and a short preview to DigitalOcean. The access key stays on the server. The labs still do the math.
+          </p>
+          {analystNote && (
+            <p className="text-xs font-mono text-slate-200 leading-relaxed">{analystNote}</p>
+          )}
         </div>
       </div>
 
@@ -226,9 +371,11 @@ export default function ByteDetectivePanel({
             {analysis.entropy}
           </div>
           <div className="text-[11px] font-mono mt-0.5">
-            {analysis.entropy > 7.2 ? (
+            {analysis.totalBytes < 16 ? (
+              <span className="text-slate-400">Need 16+ bytes to classify</span>
+            ) : analysis.entropy > 7.3 ? (
               <span className="text-amber-400 font-semibold">High (Encrypted/Compressed)</span>
-            ) : analysis.entropy < 3.0 ? (
+            ) : analysis.entropy < 2.5 ? (
               <span className="text-teal-400">Low (Repetitive/Sparse)</span>
             ) : (
               <span className="text-slate-400">Medium (Structured/Text)</span>
