@@ -5,8 +5,12 @@ import type { EmbedIntegration } from './types.ts';
 export const CYBERCHEF_VERSION = `11.5.0 (${CYBERCHEF_SHA})`;
 const CYBERCHEF_THEME = 'cybercalc';
 
+function cyberChefBase(): string {
+  return CYBERCHEF_ORIGIN.endsWith('.html') ? CYBERCHEF_ORIGIN : `${CYBERCHEF_ORIGIN}/`;
+}
+
 export function cyberChefHomeUrl(): string {
-  return `${CYBERCHEF_ORIGIN}/#theme=${CYBERCHEF_THEME}`;
+  return `${cyberChefBase()}#theme=${CYBERCHEF_THEME}`;
 }
 
 /** Path for the full-window Chef page. Keeps the CyberChef hash, including the skin. */
@@ -41,7 +45,7 @@ export function recipeFor(id: ChefRecipeId, bytes: Uint8Array): string {
 export function buildCyberChefUrl(id: ChefRecipeId, bytes: Uint8Array): ChefUrl {
   const recipe = recipeFor(id, bytes);
   const input = encodeURIComponent(unpaddedBase64(bytes));
-  const url = `${CYBERCHEF_ORIGIN}/#recipe=${recipe}&input=${input}&theme=${CYBERCHEF_THEME}`;
+  const url = `${cyberChefBase()}#recipe=${recipe}&input=${input}&theme=${CYBERCHEF_THEME}`;
   if (url.length > MAX_CHEF_URL_LENGTH) {
     return {
       url: null,

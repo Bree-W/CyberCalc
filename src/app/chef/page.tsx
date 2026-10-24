@@ -10,7 +10,8 @@ export default function ChefPage() {
   useEffect(() => {
     const hash = window.location.hash;
     if (hash.includes('recipe=') || hash.includes('theme=')) {
-      setSrc(`${CYBERCHEF_ORIGIN}/${hash}`);
+      const base = CYBERCHEF_ORIGIN.endsWith('.html') ? CYBERCHEF_ORIGIN : `${CYBERCHEF_ORIGIN}/`;
+      setSrc(`${base}${hash}`);
     }
   }, []);
 

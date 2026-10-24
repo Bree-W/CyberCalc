@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { analyzeImageLocally, type AperiAnalysisBundle } from './aperi-local.ts';
 import { APERISOLVE_ORIGIN, MAX_CONTENT_LENGTH, UPSTREAM_TIMEOUT_MS } from './constants.ts';
 import { detectAllowedImage, filenameForImage } from './magic-bytes.ts';
 import { redactSecret } from './redact.ts';
@@ -7,23 +8,23 @@ import { sanitizeResults } from './results.ts';
 import { isSubmissionHash, pollExpired, rememberSubmission, submissionStartedAt } from './submissions.ts';
 
 const SAMPLE_NAMES = new Set(['example1.png', 'example2.jpg', 'example3.png']);
-
-const DOWN_TODO = 'Start it with scripts/aperisolve-up.sh. The adapter does not run analyzers on the host.';
+const localBundles = new Map<string, AperiAnalysisBundle>();
 
 export interface UploadOutcome {
   ok: boolean;
   status: number;
   submissionHash?: string;
+  bundle?: AperiAnalysisBundle;
   error?: string;
   todo?: string;
 }
 
 export function resolveSamplePath(name: string): string | null {
   if (!SAMPLE_NAMES.has(name)) return null;
-  const root = path.resolve(process.cwd(), 'Combined_Repos/AperiSolve/examples');
-  const file = path.resolve(root, name);
-  if (file !== path.join(root, name)) return null;
-  return file;
+  const bundledRoot = path.resolve(process.cwd(), 'public/samples/aperisolve');
+  const bundledFile = path.resolve(bundledRoot, name);
+  if (bundledFile === path.join(bundledRoot, name)) return bundledFile;
+  return null;
 }
 
 export async function forwardUpload(
@@ -40,65 +41,65 @@ export async function forwardUpload(
     return { ok: false, status: 415, error: 'File type is not in the image allowlist' };
   }
 
-  const form = new FormData();
-  form.append('image', new Blob([Buffer.from(bytes)]), filenameForImage(filename, kind));
-  if (password) form.append('password', password);
-  if (options?.deep) form.append('deep', 'true');
+  const safeName = filenameForImage(filename, kind);
 
-  let response: Response;
+  // Run the built-in zero-Docker TypeScript Aperi'Solve engine immediately so it works out of the box.
   try {
-    response = await fetch(`${APERISOLVE_ORIGIN}/upload`, {
-      method: 'POST',
-      body: form,
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    const bundle = analyzeImageLocally(bytes, safeName, {
+      password: password ? '[redacted]' : undefined,
+      deep: options?.deep,
     });
-  } catch (error) {
-    const name = error instanceof Error ? error.name : '';
-    if (name === 'TimeoutError' || name === 'AbortError') {
-      return { ok: false, status: 504, error: 'Upstream timed out' };
-    }
-    return { ok: false, status: 503, error: "Aperi'Solve is not running", todo: DOWN_TODO };
+    rememberSubmission(bundle.submissionHash);
+    localBundles.set(bundle.submissionHash, bundle);
+    return {
+      ok: true,
+      status: 200,
+      submissionHash: bundle.submissionHash,
+      bundle,
+    };
+  } catch (err) {
+    const rawMsg = err instanceof Error ? err.message : 'Analysis failed';
+    return { ok: false, status: 500, error: redactSecret(rawMsg, password) };
   }
-
-  const raw = await response.text();
-  let parsed: { error?: unknown; submission_hash?: unknown } = {};
-  try {
-    parsed = JSON.parse(raw) as { error?: unknown; submission_hash?: unknown };
-  } catch {
-    return { ok: false, status: 502, error: "Aperi'Solve returned an unexpected response" };
-  }
-
-  if (response.ok && typeof parsed.submission_hash === 'string' && isSubmissionHash(parsed.submission_hash)) {
-    rememberSubmission(parsed.submission_hash);
-    return { ok: true, status: 200, submissionHash: parsed.submission_hash };
-  }
-
-  const message = typeof parsed.error === 'string'
-    ? redactSecret(parsed.error, password)
-    : "Aperi'Solve rejected the upload";
-  return { ok: false, status: response.status || 502, error: message };
 }
 
 export async function readSample(name: string): Promise<{ bytes: Uint8Array } | { error: string; status: number; todo?: string }> {
   const file = resolveSamplePath(name);
   if (!file) return { error: 'Unknown sample', status: 400 };
-  try {
-    const stat = await fs.stat(file);
-    if (stat.size > MAX_CONTENT_LENGTH) return { error: 'Upload exceeds 3145728 bytes', status: 413 };
-    const bytes = new Uint8Array(await fs.readFile(file));
-    return { bytes };
-  } catch {
-    return {
-      error: 'Example image is not in the local checkout',
-      status: 503,
-      todo: 'Run scripts/bootstrap-tools.sh, then scripts/aperisolve-up.sh.',
-    };
+  const fallbacks = [
+    file,
+    path.resolve(process.cwd(), 'Combined_Repos/AperiSolve/examples', name),
+  ];
+  for (const candidate of fallbacks) {
+    try {
+      const stat = await fs.stat(candidate);
+      if (stat.size > MAX_CONTENT_LENGTH) return { error: 'Upload exceeds 3145728 bytes', status: 413 };
+      const bytes = new Uint8Array(await fs.readFile(candidate));
+      return { bytes };
+    } catch {
+      // try next path
+    }
   }
+  return {
+    error: 'Sample image could not be found in public/samples/aperisolve/',
+    status: 503,
+  };
 }
 
 export async function fetchUpstreamStatus(hash: string): Promise<{ status: number; body: Record<string, unknown> }> {
   const gate = gateHash(hash);
   if (gate) return gate;
+
+  if (localBundles.has(hash)) {
+    return {
+      status: 200,
+      body: {
+        status: 'completed',
+        submissionHash: hash,
+      },
+    };
+  }
+
   try {
     const response = await fetch(`${APERISOLVE_ORIGIN}/status/${hash}`, {
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
@@ -123,6 +124,29 @@ export async function fetchUpstreamStatus(hash: string): Promise<{ status: numbe
 export async function fetchUpstreamResult(hash: string): Promise<{ status: number; body: Record<string, unknown> }> {
   const gate = gateHash(hash);
   if (gate) return gate;
+
+  const local = localBundles.get(hash);
+  if (local) {
+    return {
+      status: 200,
+      body: {
+        results: sanitizeResults(local.results),
+        meta: {
+          filename: local.filename,
+          kind: local.kind,
+          size: local.size,
+          width: local.width,
+          height: local.height,
+          repairedHeight: local.repairedHeight,
+          repairedPngDataUrl: local.repairedPngDataUrl,
+          md5: local.md5,
+          sha256: local.sha256,
+        },
+        submissionHash: hash,
+      },
+    };
+  }
+
   try {
     const response = await fetch(`${APERISOLVE_ORIGIN}/result/${hash}`, {
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),

@@ -71,11 +71,40 @@ export async function fetchAperiStatus(hash: string): Promise<{ status?: string;
   };
 }
 
+export interface AperiResultMeta {
+  filename: string;
+  kind: string;
+  size: number;
+  width?: number;
+  height?: number;
+  repairedHeight?: number;
+  repairedPngDataUrl?: string;
+  md5: string;
+  sha256: string;
+}
+
 export async function fetchAperiResult(hash: string): Promise<Record<string, unknown> | null> {
   const response = await fetch(`/api/aperisolve/result?hash=${encodeURIComponent(hash)}`, { cache: 'no-store' });
   if (response.status === 425) return null;
   const data = await readBody(response);
   const results = data.results;
   if (results && typeof results === 'object') return results as Record<string, unknown>;
+  return null;
+}
+
+export async function fetchAperiResultFull(hash: string): Promise<{
+  results: Record<string, unknown>;
+  meta?: AperiResultMeta;
+} | null> {
+  const response = await fetch(`/api/aperisolve/result?hash=${encodeURIComponent(hash)}`, { cache: 'no-store' });
+  if (response.status === 425) return null;
+  const data = await readBody(response);
+  const results = data.results;
+  if (results && typeof results === 'object') {
+    return {
+      results: results as Record<string, unknown>,
+      meta: data.meta && typeof data.meta === 'object' ? (data.meta as AperiResultMeta) : undefined,
+    };
+  }
   return null;
 }

@@ -160,9 +160,18 @@ export default function IntegrationsPanel() {
       </section>
 
       <section data-testid="case-file" className="rounded-xl border border-[#1a253e] bg-[#0b101c] p-4">
-        <h3 className="font-mono text-sm text-cyan-300">Aperi&apos;Solve case file</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-mono text-sm text-cyan-300">Aperi&apos;Solve case file</h3>
+          <Link
+            href="/aperi"
+            data-testid="open-aperi-window"
+            className="rounded border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 font-mono text-xs text-cyan-200"
+          >
+            Open full Aperi workbench
+          </Link>
+        </div>
         <p className="mt-2 font-mono text-xs text-slate-400">
-          The browser posts to /api/aperisolve. That route forwards to 127.0.0.1:5050. Analyzers stay in the container.
+          The browser posts to /api/aperisolve, which runs the built-in zero-Docker steganography &amp; PNG CRC repair engine.
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <label className="font-mono text-xs text-slate-400">

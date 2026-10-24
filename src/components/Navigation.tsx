@@ -12,6 +12,7 @@ import {
   Calculator,
   Puzzle,
   ChefHat,
+  Layers,
 } from 'lucide-react';
 
 export type ActiveTab =
@@ -40,7 +41,7 @@ export function isActiveTab(value: string): value is ActiveTab {
 }
 
 interface NavigationProps {
-  activeTab: ActiveTab | 'chef';
+  activeTab: ActiveTab | 'chef' | 'aperi';
   onTabChange?: (tab: ActiveTab) => void;
 }
 
@@ -166,6 +167,9 @@ export default function Navigation({ activeTab, onTabChange }: NavigationProps) 
             </button>
           );
         })}
+        <Link href="/aperi" className={tabClass(activeTab === 'aperi')}>
+          <TabInner icon={Layers} label="Aperi" isActive={activeTab === 'aperi'} />
+        </Link>
         <Link href="/chef" className={tabClass(activeTab === 'chef')}>
           <TabInner icon={ChefHat} label="Chef" isActive={activeTab === 'chef'} />
         </Link>

@@ -1,5 +1,8 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { analyzeImageLocally } from './aperi-local.ts';
 import { MAX_CONTENT_LENGTH, POLL_DEADLINE_MS, UPLOADS_PER_MINUTE } from './constants.ts';
 import { detectAllowedImage, filenameForImage } from './magic-bytes.ts';
 import { allowUpload, resetUploadLimits } from './rate-limit.ts';
@@ -64,4 +67,25 @@ test('polling stops 120 seconds after a known submission', () => {
   assert.equal(submissionStartedAt(hash), 5000);
   assert.equal(pollExpired(5000, 5000 + POLL_DEADLINE_MS - 1), false);
   assert.equal(pollExpired(5000, 5000 + POLL_DEADLINE_MS), true);
+});
+
+test('local aperisolve engine solves all three bundled sample challenges without docker', () => {
+  const sampleDir = path.resolve(process.cwd(), 'public/samples/aperisolve');
+
+  const ex1 = new Uint8Array(fs.readFileSync(path.join(sampleDir, 'example1.png')));
+  const res1 = analyzeImageLocally(ex1, 'example1.png');
+  assert.equal(res1.results.zsteg?.status, 'ok');
+  assert.match(firstExtractedText(res1.results) ?? '', /I turned myself into a pickle, Morty!/);
+
+  const ex2 = new Uint8Array(fs.readFileSync(path.join(sampleDir, 'example2.jpg')));
+  const res2 = analyzeImageLocally(ex2, 'example2.jpg');
+  const exif2 = res2.results.exiftool?.output as Record<string, string>;
+  assert.equal(exif2['XMP pdf:Author'], 'Rick-SANCHEZ');
+
+  const ex3 = new Uint8Array(fs.readFileSync(path.join(sampleDir, 'example3.png')));
+  const res3 = analyzeImageLocally(ex3, 'example3.png');
+  assert.equal(res3.height, 56);
+  assert.equal(res3.repairedHeight, 1080);
+  assert.equal(res3.results.pcrt?.status, 'ok');
+  assert.ok(res3.repairedPngDataUrl?.startsWith('data:image/png;base64,'));
 });

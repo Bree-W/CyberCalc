@@ -1,5 +1,7 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { NextResponse } from 'next/server';
-import { APERISOLVE_ORIGIN, CYBERCHEF_ORIGIN } from '@/integrations/constants.ts';
+import { CYBERCHEF_ORIGIN } from '@/integrations/constants.ts';
 
 export const runtime = 'nodejs';
 
@@ -14,10 +16,24 @@ async function reachable(url: string, marker: string): Promise<boolean> {
   }
 }
 
+async function hasStaticCyberChefBundle(): Promise<boolean> {
+  try {
+    const indexHtml = path.resolve(process.cwd(), 'public/cyberchef/index.html');
+    const text = await fs.readFile(indexHtml, 'utf8');
+    // The real CyberChef bundle contains #recipe / #input panes or assets/main.js
+    return text.includes('assets/main.js') || text.includes('Download CyberChef');
+  } catch {
+    return false;
+  }
+}
+
 export async function GET() {
-  const [cyberchef, aperisolve] = await Promise.all([
-    reachable(`${CYBERCHEF_ORIGIN}/`, 'CyberChef'),
-    reachable(`${APERISOLVE_ORIGIN}/`, 'Aperi'),
+  const [staticChef, remoteChef] = await Promise.all([
+    hasStaticCyberChefBundle(),
+    CYBERCHEF_ORIGIN.startsWith('http') ? reachable(`${CYBERCHEF_ORIGIN}/`, 'CyberChef') : Promise.resolve(false),
   ]);
-  return NextResponse.json({ cyberchef, aperisolve });
+  return NextResponse.json({
+    cyberchef: staticChef || remoteChef,
+    aperisolve: true,
+  });
 }
