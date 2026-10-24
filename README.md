@@ -113,6 +113,25 @@ npm test
 
 ---
 
+## Open-source integrations
+
+CyberCalc wraps three tools. It does not copy their source into `src/`.
+
+- **Converters** live in `src/core/` (hex, binary, decimal, base64, base32, URL encoding, byte units). `npm test` covers empty input, invalid characters, and large values.
+- **CyberChef** 11.5.0 (`11b86fec`) is an iframe on `127.0.0.1:8081` with `sandbox="allow-scripts allow-same-origin allow-forms"`. `public/cyberchef/` is only a stub. Port 8080 is left free.
+- **Aperi'Solve** 3.7.12 from `pyproject.toml` (`9084bad`) is reached through `/api/aperisolve`. The checkout's Compose file is not edited. `deploy/aperisolve.override.yml` binds `127.0.0.1:5050` and sets `MAX_CONTENT_LENGTH=3145728`. `.env.example` still says `PROJECT_VERSION=3.1.3`; that value is stale.
+- **dCode** is a link to https://www.dcode.fr/ with attribution. Its license is unverified.
+
+```bash
+scripts/bootstrap-tools.sh   # clone the pinned checkouts into Combined_Repos/ (gitignored)
+scripts/cyberchef-up.sh      # serve the CyberChef checkout on 127.0.0.1:8081
+scripts/aperisolve-up.sh     # start Aperi'Solve with the CyberCalc override
+```
+
+CyberChef's checkout wants Node 24 through 26. Notices are in `THIRD_PARTY_NOTICES.md`. Tradeoffs are in `docs/decisions.md`.
+
+Git: branch from current HEAD as `feat/core-converters`, `feat/cyberchef-embed`, or `feat/aperisolve-proxy`. One PR per slice. Do not commit `Combined_Repos/`, `.env`, or malware samples.
+
 ## 📁 Project Structure
 
 ```text

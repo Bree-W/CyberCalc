@@ -5,6 +5,7 @@ import { InputFormat, ByteAnalysisResult, HistoryEntry, WorkbenchLoad } from '@/
 import { AnalystAction, buildAnalystSummary } from '@/lib/analyst';
 import { analyzeByteSequence } from '@/lib/byte-analysis';
 import ByteGrid from './ByteGrid';
+import type { ChefRecipeId } from '@/integrations/cyberchef.ts';
 import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   Binary,
@@ -29,6 +30,7 @@ interface ByteDetectivePanelProps {
   loadRequest?: WorkbenchLoad | null;
   resetId?: number;
   initialInput?: string;
+  onOpenInCyberChef?: (handoff: { recipe: ChefRecipeId; bytes: Uint8Array }) => void;
 }
 
 export default function ByteDetectivePanel({
@@ -38,6 +40,7 @@ export default function ByteDetectivePanel({
   loadRequest,
   resetId = 0,
   initialInput = '4D 5A 90 00 03 00 00 00 04 00 00 00 FF FF 00 00',
+  onOpenInCyberChef,
 }: ByteDetectivePanelProps) {
   const [rawInput, setRawInput] = useState<string>(initialInput);
   const [format, setFormat] = useState<InputFormat>('auto');
@@ -344,6 +347,39 @@ export default function ByteDetectivePanel({
           {analystNote && (
             <p className="text-xs font-mono text-slate-200 leading-relaxed">{analystNote}</p>
           )}
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="font-mono text-[11px] text-slate-500">CyberChef:</span>
+          {(
+            [
+              ['from-hex', 'From Hex'],
+              ['magic', 'Magic'],
+              ['to-base64', 'To Base64'],
+            ] as const
+          ).map(([recipe, label]) => (
+            <button
+              key={recipe}
+              type="button"
+              data-testid={`chef-${recipe}`}
+              onClick={() => {
+                if (!onOpenInCyberChef) return;
+                const bytes = recipe === 'from-hex'
+                  ? new TextEncoder().encode(analysis.hexString || rawInput)
+                  : analysis.bytes;
+                onOpenInCyberChef({ recipe, bytes });
+                onLogHistory({
+                  tool: 'Byte Detective',
+                  operation: `Open in CyberChef (${label})`,
+                  inputSummary: rawInput.slice(0, 80),
+                  resultSummary: 'Opened the Integrations tab',
+                });
+              }}
+              className="rounded border border-[#202d4a] bg-[#101726] px-2 py-0.5 font-mono text-[11px] text-emerald-300"
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 

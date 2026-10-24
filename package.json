@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "node --experimental-strip-types --test run-tests.mjs \"src/core/*.test.ts\" \"src/integrations/*.test.ts\""
     "test": "node --experimental-strip-types --import ./test/register.mjs --test run-tests.mjs"
   },
   "dependencies": {
