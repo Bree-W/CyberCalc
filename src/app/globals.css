@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+
 :root {
   --background: #06090e;
   --foreground: #e6edf3;
