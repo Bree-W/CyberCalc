@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { InputFormat, ByteAnalysisResult, HistoryEntry, WorkbenchLoad } from '@/types/analysis';
+import { AnalystAction, buildAnalystSummary } from '@/lib/analyst';
 import { analyzeByteSequence } from '@/lib/byte-analysis';
 import ByteGrid from './ByteGrid';
 import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
@@ -24,6 +25,7 @@ const INPUT_FORMATS: InputFormat[] = ['auto', 'hex', 'binary', 'decimal', 'text'
 interface ByteDetectivePanelProps {
   onLogHistory: (item: HistoryEntry) => void;
   onSendTo?: (target: 'bitwise-lab' | 'reverse-eng', hex: string) => void;
+  onApplyAnalyst?: (action: Exclude<AnalystAction, 'none' | 'decode-base64'>, hex: string, text: string) => void;
   loadRequest?: WorkbenchLoad | null;
   resetId?: number;
   initialInput?: string;
@@ -32,6 +34,7 @@ interface ByteDetectivePanelProps {
 export default function ByteDetectivePanel({
   onLogHistory,
   onSendTo,
+  onApplyAnalyst,
   loadRequest,
   resetId = 0,
   initialInput = '4D 5A 90 00 03 00 00 00 04 00 00 00 FF FF 00 00',
@@ -42,6 +45,9 @@ export default function ByteDetectivePanel({
   const [activeViewTab, setActiveViewTab] = useState<'grid' | 'hex' | 'binary' | 'decimal' | 'utf8'>('grid');
   const [fileNotice, setFileNotice] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [analystBusy, setAnalystBusy] = useState(false);
+  const [analystNote, setAnalystNote] = useState<string | null>(null);
+  const [analystModel, setAnalystModel] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useWorkbenchLoad(loadRequest, 'byte-detective', payload => {
@@ -56,12 +62,64 @@ export default function ByteDetectivePanel({
     setRawInput('');
     setFormat('auto');
     setFileNotice(null);
+    setAnalystNote(null);
+    setAnalystModel(null);
   });
 
-  // Compute byte analysis
   const analysis: ByteAnalysisResult = React.useMemo(() => {
     return analyzeByteSequence(rawInput, format);
   }, [rawInput, format]);
+
+  const askOpenModel = async () => {
+    if (analysis.totalBytes === 0 || analystBusy) return;
+    setAnalystBusy(true);
+    setAnalystNote(null);
+    try {
+      const summary = buildAnalystSummary(analysis);
+      const response = await fetch('/api/analyst', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(summary),
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        explanation?: string;
+        action?: AnalystAction;
+        model?: string;
+      };
+      if (!response.ok || !data.explanation || !data.action) {
+        setAnalystNote(data.error || 'The model request failed.');
+        return;
+      }
+      setAnalystModel(data.model || null);
+      setAnalystNote(data.explanation);
+      onLogHistory({
+        tool: 'Byte Detective',
+        operation: `Open model: ${data.action}`,
+        inputSummary: summary.hexPreview.slice(0, 48),
+        params: data.model,
+        resultSummary: data.explanation,
+        restoreTab: 'byte-detective',
+        restore: { input: rawInput, format },
+      });
+      if (data.action === 'decode-base64') {
+        const text = analysis.utf8String.trim();
+        if (/^[A-Za-z0-9+/=\s]+$/.test(text) && text.length >= 8) {
+          setFormat('base64');
+          setRawInput(text);
+        }
+        return;
+      }
+      if (data.action !== 'none') {
+        const hex = analysis.hexString.split(/\s+/).slice(0, 1024).join(' ');
+        onApplyAnalyst?.(data.action, hex, analysis.utf8String.trim().slice(0, 200));
+      }
+    } catch {
+      setAnalystNote('The model request could not be completed.');
+    } finally {
+      setAnalystBusy(false);
+    }
+  };
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -265,6 +323,27 @@ export default function ByteDetectivePanel({
           >
             Send to endianness
           </button>
+        </div>
+
+        <div className="mt-3 flex flex-col gap-2 rounded-lg border border-[#1a253e] bg-[#070b14] p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <button
+              disabled={analysis.totalBytes === 0 || analystBusy}
+              onClick={askOpenModel}
+              className="px-3 py-1.5 rounded text-xs font-mono bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-200 disabled:opacity-40"
+            >
+              {analystBusy ? 'Asking the model…' : 'Ask the open model'}
+            </button>
+            <span className="text-[11px] font-mono text-slate-500">
+              {analystModel ? analystModel : 'openai-gpt-oss-20b'} · summary only
+            </span>
+          </div>
+          <p className="text-[11px] font-mono text-slate-500 leading-relaxed">
+            Sends entropy, signatures, and a short preview to DigitalOcean. The access key stays on the server. The labs still do the math.
+          </p>
+          {analystNote && (
+            <p className="text-xs font-mono text-slate-200 leading-relaxed">{analystNote}</p>
+          )}
         </div>
       </div>
 

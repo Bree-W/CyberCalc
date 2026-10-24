@@ -14,6 +14,7 @@ import FatalShutdownModal from '@/components/FatalShutdownModal';
 import TraceHistoryModal from '@/components/TraceHistoryModal';
 import QuickSamplesModal from '@/components/QuickSamplesModal';
 import { TraceHistoryItem, WorkbenchLoad } from '@/types/analysis';
+import { AnalystAction } from '@/lib/analyst';
 import { Check } from 'lucide-react';
 
 export default function Home() {
@@ -70,6 +71,26 @@ export default function Home() {
     showToast(`Loaded sample into ${tab}`);
   };
 
+  const handleAnalystAction = (
+    action: Exclude<AnalystAction, 'none' | 'decode-base64'>,
+    hex: string,
+    text: string
+  ) => {
+    if (action === 'single-byte-xor') {
+      pushLoad('bitwise-lab', { subtab: 'single-key-bruteforce', brute: hex.replace(/\s+/g, '') });
+      showToast('Model chose single-byte XOR');
+    } else if (action === 'repeating-xor') {
+      pushLoad('bitwise-lab', { subtab: 'repeating-xor', data: hex });
+      showToast('Model chose repeating-key XOR');
+    } else if (action === 'endianness') {
+      pushLoad('reverse-eng', { subtab: 'endianness', input: hex.split(/\s+/).slice(0, 16).join(' ') });
+      showToast('Model chose endianness');
+    } else if (action === 'identify-hash') {
+      pushLoad('hash-detective', { input: text });
+      showToast('Model chose hash identification');
+    }
+  };
+
   const handleSendBytes = (target: 'bitwise-lab' | 'reverse-eng', hex: string) => {
     if (target === 'bitwise-lab') {
       pushLoad(target, { subtab: 'repeating-xor', data: hex });
@@ -120,6 +141,7 @@ export default function Home() {
             resetId={resetId}
             onLogHistory={handleLogHistory}
             onSendTo={handleSendBytes}
+            onApplyAnalyst={handleAnalystAction}
           />
         </div>
         <div className={activeTab === 'hash-detective' ? undefined : 'hidden'}>
@@ -160,9 +182,9 @@ export default function Home() {
             <span>— Forensic &amp; Cryptographic Data Workbench</span>
           </div>
           <div className="flex items-center space-x-4 text-slate-400">
-            <span>100% Client-Side Engine</span>
+            <span>Labs run locally</span>
             <span>•</span>
-            <span>Zero Backend Footprint</span>
+            <span>Open model is opt-in</span>
           </div>
         </div>
       </footer>

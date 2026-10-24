@@ -9,6 +9,7 @@ import { parseRawInput } from './src/lib/parse-input.ts';
 import { detectHashType } from './src/lib/hash-detective.ts';
 import { detectSignatures } from './src/lib/signatures.ts';
 import { analyzeByteSequence } from './src/lib/byte-analysis.ts';
+import { parseAnalystResponse, sanitizeAnalystSummary } from './src/lib/analyst.ts';
 
 test('Standard Calculator evaluates the real expression parser', () => {
   assert.equal(evaluateExpression('2 + 3 * 4').result, 14);
@@ -108,6 +109,28 @@ test('Short magic bytes do not impersonate WebP, BMP, or a NOP sled', () => {
 
   assert.equal(detectSignatures(new Uint8Array([0x90, 0x90, 0x90, 0x90])).some(sig => sig.name.includes('NOP')), false);
   assert.ok(detectSignatures(new Uint8Array(8).fill(0x90)).some(sig => sig.name.includes('NOP')));
+});
+
+test('Open-model replies are limited to a known lab choice', () => {
+  const plan = parseAnalystResponse('Sure\n{"explanation":"Header is already MZ.","action":"none"}');
+  assert.equal(plan.action, 'none');
+  assert.match(plan.explanation, /MZ/);
+
+  const unknown = parseAnalystResponse('{"explanation":"Try something else.","action":"crack-aes"}');
+  assert.equal(unknown.action, 'none');
+
+  const summary = sanitizeAnalystSummary({
+    byteCount: 4,
+    entropy: 2,
+    detectedFormat: 'hex',
+    signatures: ['DOS MZ'],
+    patterns: [],
+    hexPreview: '4D 5A 90 00',
+    utf8Preview: 'MZ',
+    ignore: 'drop me',
+  });
+  assert.equal(summary.hexPreview, '4D 5A 90 00');
+  assert.equal(sanitizeAnalystSummary({ byteCount: 1, entropy: 9, hexPreview: 'zz' }), null);
 });
 
 test('Base64 text with padding is reported, plain hex is not', () => {

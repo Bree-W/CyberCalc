@@ -67,7 +67,7 @@
 
 ### 7. 📜 Session History & Privacy Guarantee
 - **Transformation History**: Logs operations, inputs, parameters, outputs, and timestamps with one-click re-load and copy actions.
-- **100% Client-Side Privacy**: All calculations, hashing, and parsing run exclusively in the browser. Zero telemetry, zero server-side storage, zero third-party AI transmission.
+- **Local-first privacy**: Calculations, hashing, and parsing run in the browser. The open-model button is the only network call, and it sends a short summary after an explicit click. There is no telemetry and no stored upload.
 
 ---
 
@@ -159,9 +159,9 @@ cybercalc/
 
 ## 🔒 Privacy & Forensic Integrity Notice
 
-CyberCalc is built from the ground up to respect data privacy:
-- Input data never leaves the browser.
-- File analysis processes buffers locally in client RAM without uploading.
+CyberCalc keeps the forensic math in the browser:
+- Entropy, signatures, conversions, XOR, and hashing run locally.
+- **Ask the open model** sends a short summary (entropy, signature names, and a preview) to DigitalOcean Serverless Inference. The model access key stays on the server. Nothing is sent until that button is clicked.
 - Signature matches are accompanied by forensic disclaimers clarifying that matching headers alone do not verify complete file safety or validity.
 
 ---
