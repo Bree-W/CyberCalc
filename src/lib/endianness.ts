@@ -179,9 +179,14 @@ export interface BinaryDiffResult {
   mismatchCount: number;
   matchPercentage: number;
   entries: ByteDiffEntry[];
+  entriesTruncated: boolean;
 }
 
-export function compareByteSequences(seqA: Uint8Array, seqB: Uint8Array): BinaryDiffResult {
+export function compareByteSequences(
+  seqA: Uint8Array,
+  seqB: Uint8Array,
+  entryLimit = 4096,
+): BinaryDiffResult {
   const maxLen = Math.max(seqA.length, seqB.length);
   const entries: ByteDiffEntry[] = [];
   let matchingCount = 0;
@@ -213,17 +218,19 @@ export function compareByteSequences(seqA: Uint8Array, seqB: Uint8Array): Binary
       mismatchCount++;
     }
 
-    entries.push({
-      offset: i,
-      byteA: a,
-      byteB: b,
-      hexA: a !== undefined ? toHex2(a) : '--',
-      hexB: b !== undefined ? toHex2(b) : '--',
-      asciiA: a !== undefined && a >= 32 && a <= 126 ? String.fromCharCode(a) : '.',
-      asciiB: b !== undefined && b >= 32 && b <= 126 ? String.fromCharCode(b) : '.',
-      isMatch,
-      status,
-    });
+    if (i < entryLimit) {
+      entries.push({
+        offset: i,
+        byteA: a,
+        byteB: b,
+        hexA: a !== undefined ? toHex2(a) : '--',
+        hexB: b !== undefined ? toHex2(b) : '--',
+        asciiA: a !== undefined && a >= 32 && a <= 126 ? String.fromCharCode(a) : '.',
+        asciiB: b !== undefined && b >= 32 && b <= 126 ? String.fromCharCode(b) : '.',
+        isMatch,
+        status,
+      });
+    }
   }
 
   const matchPercentage = maxLen === 0 ? 100 : Number(((matchingCount / maxLen) * 100).toFixed(1));
@@ -235,5 +242,6 @@ export function compareByteSequences(seqA: Uint8Array, seqB: Uint8Array): Binary
     mismatchCount,
     matchPercentage,
     entries,
+    entriesTruncated: maxLen > entries.length,
   };
 }

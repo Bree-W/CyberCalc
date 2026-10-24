@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+
 :root {
   --background: #06090e;
   --foreground: #e6edf3;
@@ -40,34 +46,7 @@ body {
   background: #00e5a3;
 }
 
-/* Subtle CRT scanline effect (non-intrusive) */
-.scanlines-overlay {
-  background: linear-gradient(
-    rgba(18, 16, 16, 0) 50%, 
-    rgba(0, 0, 0, 0.25) 50%
-  );
-  background-size: 100% 4px;
-  pointer-events: none;
-}
-
 /* Monospace font styling helper */
 .font-cyber {
   font-family: "JetBrains Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-}
-
-/* Glowing text utility */
-.glow-text-cyan {
-  text-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
-}
-
-.glow-text-teal {
-  text-shadow: 0 0 10px rgba(0, 229, 163, 0.6);
-}
-
-.glow-text-green {
-  text-shadow: 0 0 10px rgba(57, 255, 20, 0.6);
-}
-
-.glow-text-rose {
-  text-shadow: 0 0 10px rgba(255, 51, 102, 0.8);
 }

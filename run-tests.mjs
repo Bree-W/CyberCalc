@@ -1,22 +1,46 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateExpression } from './src/lib/calculator.ts';
-import { computeRepeatingKeyXor } from './src/lib/xor.ts';
-import { analyzeEndianness } from './src/lib/endianness.ts';
-import { calculateSubnet, analyzeIpv6 } from './src/lib/networking.ts';
-import { convertFromValue } from './src/lib/conversions.ts';
-import { parseRawInput } from './src/lib/parse-input.ts';
-import { detectHashType } from './src/lib/hash-detective.ts';
-import { detectSignatures } from './src/lib/signatures.ts';
-import { analyzeByteSequence } from './src/lib/byte-analysis.ts';
-import { parseAnalystResponse, sanitizeAnalystSummary } from './src/lib/analyst.ts';
-import { routeParcel } from './src/lib/send-to.ts';
+import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 
-test('Standard Calculator evaluates the real expression parser', () => {
+const require = createRequire(import.meta.url);
+const ts = require('typescript');
+require.extensions['.ts'] = (module, filename) => {
+  const source = readFileSync(filename, 'utf8');
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+    },
+  });
+  module._compile(outputText, filename);
+};
+
+const { evaluateExpression } = require('./src/lib/calculator.ts');
+const { analyzeIpv6, calculateSubnet } = require('./src/lib/networking.ts');
+const { compareByteSequences, analyzeEndianness } = require('./src/lib/endianness.ts');
+const { computeRepeatingKeyXor } = require('./src/lib/xor.ts');
+const { convertFromValue } = require('./src/lib/conversions.ts');
+const { parseRawInput } = require('./src/lib/parse-input.ts');
+const { detectHashType } = require('./src/lib/hash-detective.ts');
+const { detectSignatures } = require('./src/lib/signatures.ts');
+const { analyzeByteSequence } = require('./src/lib/byte-analysis.ts');
+const { parseAnalystResponse, sanitizeAnalystSummary } = require('./src/lib/analyst.ts');
+const { routeParcel } = require('./src/lib/send-to.ts');
+
+test('Standard Calculator evaluates the scientific expression parser', () => {
   assert.equal(evaluateExpression('2 + 3 * 4').result, 14);
   assert.equal(evaluateExpression('(10 - 2) / 2').result, 4);
+  assert.equal(evaluateExpression('2^3^2').result, 512);
+  assert.equal(evaluateExpression('-2^2').result, -4);
+  assert.equal(evaluateExpression('sqrt(81)').result, 9);
+  assert.equal(evaluateExpression('sin(pi / 2)').result, 1);
+  assert.equal(evaluateExpression('pi').result, Math.PI);
+  assert.equal(evaluateExpression('e').result, Math.E);
   assert.equal(evaluateExpression('42 / 0').isDivisionByZero, true);
   assert.equal(evaluateExpression('100 / (5 - 5)').isDivisionByZero, true);
+  assert.equal(evaluateExpression('constructor').success, false);
+  assert.equal(evaluateExpression('toString(1)').success, false);
 });
 
 test('Repeating-key XOR uses the real XOR lab', () => {
@@ -33,15 +57,37 @@ test('Endianness inspector uses the real byte-order function', () => {
   assert.equal(view.littleEndianUnsigned.replace(/,/g, ''), '67305985');
 });
 
-test('CIDR subnet calculator uses the real networking function', () => {
-  const result = calculateSubnet('192.168.1.100', 24);
-  assert.ok(!('error' in result));
+test('Networking - IPv4 subnet calculations include subnet and usable-host counts', () => {
+  const result = calculateSubnet('192.168.1.100', 24, 16);
+  assert.equal('error' in result, false);
   if ('error' in result) return;
+
   assert.equal(result.networkAddress, '192.168.1.0');
   assert.equal(result.broadcastAddress, '192.168.1.255');
   assert.equal(result.firstUsableHost, '192.168.1.1');
   assert.equal(result.lastUsableHost, '192.168.1.254');
   assert.equal(result.usableHosts, 254);
+  assert.equal(result.subnetCount, 256);
+
+  assert.equal('error' in calculateSubnet('192.168.1.1', 24, 25), true);
+});
+
+test('Networking - IPv6 prefix range calculations', () => {
+  const result = analyzeIpv6('2001:db8::1234', 64);
+  assert.equal(result.isValid, true);
+  assert.equal(result.compressed, '2001:db8::1234');
+  assert.equal(result.networkAddress, '2001:db8::');
+  assert.equal(result.firstAddress, '2001:db8::');
+  assert.equal(result.lastAddress, '2001:db8::ffff:ffff:ffff:ffff');
+  assert.equal(result.totalAddresses, 1n << 64n);
+  assert.equal(analyzeIpv6('2001:db8::1', 129).isValid, false);
+});
+
+test('Reverse Engineering - Binary diff bounds displayed byte rows', () => {
+  const result = compareByteSequences(new Uint8Array(5000), new Uint8Array(5000));
+  assert.equal(result.matchingCount, 5000);
+  assert.equal(result.entries.length, 4096);
+  assert.equal(result.entriesTruncated, true);
 });
 
 test('Conversion lab two\'s complement comes from convertFromValue', () => {

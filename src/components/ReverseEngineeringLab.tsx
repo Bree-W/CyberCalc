@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { HistoryEntry, WorkbenchLoad } from '@/types/analysis';
 import { SendTarget, ToolParcel } from '@/lib/send-to';
 import SendToBar from './SendToBar';
@@ -20,10 +20,11 @@ import {
   FileCheck2,
   Copy,
   Check,
-  Sparkles,
-  Info,
   Search,
+  Upload,
 } from 'lucide-react';
+
+const MAX_DIFF_FILE_SIZE = 1024 * 1024;
 
 interface ReverseEngineeringLabProps {
   onLogHistory: (item: HistoryEntry) => void;
@@ -41,11 +42,14 @@ export default function ReverseEngineeringLab({
   const [activeTab, setActiveTab] = useState<'endianness' | 'diff' | 'signatures'>('endianness');
 
   // Endianness State
-  const [endianInput, setEndianInput] = useState<string>('01 02 03 04');
+  const [endianInput, setEndianInput] = useState<string>('');
 
   // Diff State
-  const [diffInputA, setDiffInputA] = useState<string>('4D 5A 90 00 03 00 00 00 04 00 00 00');
-  const [diffInputB, setDiffInputB] = useState<string>('4D 5A 90 00 03 00 00 00 08 00 00 00');
+  const [diffInputA, setDiffInputA] = useState<string>('');
+  const [diffInputB, setDiffInputB] = useState<string>('');
+  const [diffFileError, setDiffFileError] = useState<string | null>(null);
+  const diffFileARef = useRef<HTMLInputElement>(null);
+  const diffFileBRef = useRef<HTMLInputElement>(null);
 
   // Signature Search State
   const [signatureSearch, setSignatureSearch] = useState<string>('');
@@ -62,16 +66,17 @@ export default function ReverseEngineeringLab({
   });
 
   useWorkbenchReset(resetId, () => {
-    setEndianInput('01 02 03 04');
-    setDiffInputA('4D 5A 90 00 03 00 00 00 04 00 00 00');
-    setDiffInputB('4D 5A 90 00 03 00 00 00 08 00 00 00');
+    setEndianInput('');
+    setDiffInputA('');
+    setDiffInputB('');
+    setDiffFileError(null);
+    setSignatureSearch('');
   });
 
   // Compute Endianness
   const endianAnalysis: EndianAnalysisResult = React.useMemo(() => {
     const parsed = parseRawInput(endianInput, 'hex');
-    const bytes = parsed.bytes.length > 0 ? parsed.bytes : new Uint8Array([0x01, 0x02, 0x03, 0x04]);
-    return analyzeEndianness(bytes);
+    return analyzeEndianness(parsed.bytes);
   }, [endianInput]);
 
   // Compute Diff
@@ -87,24 +92,50 @@ export default function ReverseEngineeringLab({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const loadEndianSpecExample = () => {
-    setEndianInput('01 02 03 04');
-    onLogHistory({
-      tool: 'Reverse Engineering',
-      operation: 'Load Spec Example: 01 02 03 04',
-      inputSummary: '01 02 03 04',
-      resultSummary: 'Big-Endian: 16,909,060 vs Little-Endian: 67,305,985',
-      restoreTab: 'reverse-eng',
-      restore: { subtab: 'endianness', input: '01 02 03 04' },
-    });
+  const handleDiffFile = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    sequence: 'A' | 'B',
+  ) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+
+    if (file.size > MAX_DIFF_FILE_SIZE) {
+      setDiffFileError('Choose files that are 1 MiB or smaller.');
+      return;
+    }
+
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join(' ');
+      if (sequence === 'A') setDiffInputA(hex);
+      else setDiffInputB(hex);
+      setDiffFileError(null);
+      onLogHistory({
+        tool: 'Reverse Engineering',
+        operation: `Load Binary Diff File ${sequence}`,
+        inputSummary: `${file.name} (${file.size} bytes)`,
+        params: `Sequence ${sequence}`,
+        resultSummary: `Loaded ${bytes.length} bytes for comparison`,
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? ` ${error.message}` : '';
+      setDiffFileError(`Could not read "${file.name}".${reason}`);
+    }
   };
 
   const filteredSignatures = SIGNATURE_DATABASE.filter(sig => {
-    const q = signatureSearch.toLowerCase();
+    const q = signatureSearch.trim().toLowerCase();
+    const hexQuery = q.replace(/(?:0x|[\s:-])/g, '');
+    const magicHex = sig.magic
+      .map(byte => byte.toString(16).padStart(2, '0'))
+      .join('');
     return (
       sig.name.toLowerCase().includes(q) ||
       sig.extension.toLowerCase().includes(q) ||
-      sig.description.toLowerCase().includes(q)
+      sig.description.toLowerCase().includes(q) ||
+      magicHex.includes(hexQuery)
     );
   });
 
@@ -163,13 +194,6 @@ export default function ReverseEngineeringLab({
                   ENDIANNESS INSPECTOR // BYTE-ORDER ARCHITECTURES
                 </h2>
               </div>
-              <button
-                onClick={loadEndianSpecExample}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-[#101726] hover:bg-[#18233a] border border-teal-500/30 text-teal-300 text-xs font-mono"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Load Spec Example ("01 02 03 04")</span>
-              </button>
             </div>
 
             <div className="space-y-2">
@@ -180,7 +204,7 @@ export default function ReverseEngineeringLab({
                 type="text"
                 value={endianInput}
                 onChange={e => setEndianInput(e.target.value)}
-                placeholder="e.g. 01 02 03 04 or 7F 45 4C 46..."
+                placeholder="Enter hexadecimal bytes to inspect..."
                 className="w-full bg-[#070b14] border border-[#1a2640] rounded-lg px-4 py-3 font-mono text-sm sm:text-base text-teal-300 outline-none focus:border-teal-500"
               />
             </div>
@@ -315,6 +339,43 @@ export default function ReverseEngineeringLab({
               <span>BINARY DIFF // BYTE SEQUENCE COMPARATOR</span>
             </h2>
 
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <input
+                ref={diffFileARef}
+                type="file"
+                className="hidden"
+                onChange={event => handleDiffFile(event, 'A')}
+              />
+              <button
+                type="button"
+                onClick={() => diffFileARef.current?.click()}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#101726] hover:bg-[#18233a] border border-[#25324b] text-slate-300 text-xs font-mono"
+              >
+                <Upload className="w-4 h-4" />
+                Load file as A
+              </button>
+              <input
+                ref={diffFileBRef}
+                type="file"
+                className="hidden"
+                onChange={event => handleDiffFile(event, 'B')}
+              />
+              <button
+                type="button"
+                onClick={() => diffFileBRef.current?.click()}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#101726] hover:bg-[#18233a] border border-[#25324b] text-slate-300 text-xs font-mono"
+              >
+                <Upload className="w-4 h-4" />
+                Load file as B
+              </button>
+              <span className="text-xs text-slate-500 font-mono">Maximum 1 MiB per file</span>
+            </div>
+            {diffFileError && (
+              <p role="alert" className="mb-4 text-xs text-amber-300 font-mono">
+                {diffFileError}
+              </p>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-mono text-cyan-400 mb-1 block">
@@ -323,6 +384,7 @@ export default function ReverseEngineeringLab({
                 <textarea
                   value={diffInputA}
                   onChange={e => setDiffInputA(e.target.value)}
+                  placeholder="Enter hexadecimal bytes or load a file..."
                   rows={3}
                   className="w-full bg-[#070b14] border border-[#1a2640] rounded-lg p-3 font-mono text-xs text-cyan-200 outline-none focus:border-cyan-500"
                 />
@@ -335,6 +397,7 @@ export default function ReverseEngineeringLab({
                 <textarea
                   value={diffInputB}
                   onChange={e => setDiffInputB(e.target.value)}
+                  placeholder="Enter hexadecimal bytes or load a file..."
                   rows={3}
                   className="w-full bg-[#070b14] border border-[#1a2640] rounded-lg p-3 font-mono text-xs text-emerald-200 outline-none focus:border-emerald-500"
                 />
@@ -377,6 +440,11 @@ export default function ReverseEngineeringLab({
             </h3>
 
             <div className="overflow-x-auto max-h-96">
+              {diffResult.entriesTruncated && (
+                <p className="mb-2 text-xs text-amber-300 font-mono">
+                  Showing the first {diffResult.entries.length.toLocaleString()} byte rows. Summary counts include the full inputs.
+                </p>
+              )}
               <table className="w-full text-left font-mono text-xs">
                 <thead className="sticky top-0 bg-[#0b101c] z-10 border-b border-[#18233a] text-slate-400">
                   <tr>
@@ -455,7 +523,7 @@ export default function ReverseEngineeringLab({
                   type="text"
                   value={signatureSearch}
                   onChange={e => setSignatureSearch(e.target.value)}
-                  placeholder="Filter signatures..."
+                  placeholder="Search name, extension, or magic bytes..."
                   className="w-full bg-[#070b14] border border-[#1a2640] rounded-lg pl-9 pr-3 py-1.5 font-mono text-xs text-teal-200 outline-none"
                 />
               </div>
@@ -491,6 +559,11 @@ export default function ReverseEngineeringLab({
                 </div>
               ))}
             </div>
+            {filteredSignatures.length === 0 && (
+              <p className="py-6 text-center text-sm text-slate-400 font-mono">
+                No signatures match that search.
+              </p>
+            )}
           </div>
         </div>
       )}

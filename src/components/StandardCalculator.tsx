@@ -6,7 +6,7 @@ import { SendTarget, ToolParcel } from '@/lib/send-to';
 import SendToBar from './SendToBar';
 import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import { evaluateExpression, CalcEvalResult } from '@/lib/calculator';
-import { Calculator, Delete, RotateCcw, History, Equal } from 'lucide-react';
+import { Calculator, Delete, History } from 'lucide-react';
 
 interface StandardCalculatorProps {
   onTriggerEasterEgg: (expr: string) => void;
@@ -43,8 +43,16 @@ export default function StandardCalculator({
   });
 
   const handleInput = (val: string) => {
-    setExpression(prev => prev + val);
-    setDisplayValue(prev => (prev === '0' && !'+-*/%()'.includes(val) ? val : prev + val));
+    const endsWithValue = /(?:\d|\)|pi|e)$/.test(expression);
+    const startsAdjacentValue =
+      /^(?:pi|e|sqrt\(|sin\(|cos\(|tan\(|\()/.test(val) ||
+      (/^[\d.]/.test(val) && /(?:\)|pi|e)$/.test(expression));
+    const separator = endsWithValue && startsAdjacentValue ? '*' : '';
+
+    setExpression(prev => prev + separator + val);
+    setDisplayValue(prev =>
+      prev === '0' && !'+-*/%^()'.includes(val) ? val : prev + separator + val,
+    );
   };
 
   const handleClear = () => {
@@ -107,6 +115,8 @@ export default function StandardCalculator({
         handleInput(e.key);
       } else if (['+', '-', '*', '/'].includes(e.key)) {
         handleInput(e.key);
+      } else if (e.key === '^') {
+        handleInput('^');
       } else if (e.key === '(' || e.key === ')') {
         handleInput(e.key);
       } else if (e.key === '%') {
@@ -153,6 +163,15 @@ export default function StandardCalculator({
     { label: '.', action: () => handleInput('.'), style: 'text-slate-100 bg-[#0c121e] hover:bg-[#151f33]' },
     { label: '=', action: handleCalculate, style: 'text-black bg-cyan-400 hover:bg-cyan-300 font-bold shadow-neon-cyan' },
   ];
+  const scientificButtons = [
+    { label: '√', value: 'sqrt(', title: 'Square root' },
+    { label: 'sin', value: 'sin(', title: 'Sine (radians)' },
+    { label: 'cos', value: 'cos(', title: 'Cosine (radians)' },
+    { label: 'tan', value: 'tan(', title: 'Tangent (radians)' },
+    { label: 'xʸ', value: '^', title: 'Raise to a power' },
+    { label: 'π', value: 'pi', title: 'Pi' },
+    { label: 'e', value: 'e', title: "Euler's number" },
+  ];
 
   return (
     <div className="max-w-md mx-auto space-y-4">
@@ -189,6 +208,25 @@ export default function StandardCalculator({
           <div className="text-2xl sm:text-3xl font-bold font-mono text-slate-100 tracking-wider truncate mt-1">
             {displayValue}
           </div>
+        </div>
+
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[10px] font-mono text-slate-500">SCIENTIFIC</span>
+          <span className="text-[10px] font-mono text-slate-500">Trigonometry uses radians</span>
+        </div>
+        <div className="grid grid-cols-4 gap-2 mb-3 font-mono text-sm">
+          {scientificButtons.map(button => (
+            <button
+              key={button.label}
+              type="button"
+              title={button.title}
+              aria-label={button.title}
+              onClick={() => handleInput(button.value)}
+              className="h-10 rounded-lg border border-[#1a253e] bg-[#111827] text-slate-200 hover:bg-[#182238] font-semibold transition"
+            >
+              {button.label}
+            </button>
+          ))}
         </div>
 
         {/* Keypad Grid */}

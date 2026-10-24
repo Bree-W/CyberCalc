@@ -19,7 +19,6 @@ import {
   Copy,
   Check,
   AlertTriangle,
-  Sparkles,
   ArrowRight,
   ShieldAlert,
   Search,
@@ -37,18 +36,18 @@ export default function BitwiseLab({ onLogHistory, onSend, loadRequest, resetId 
 
   // Single Operation State
   const [op, setOp] = useState<BitwiseOp>('XOR');
-  const [operandAStr, setOperandAStr] = useState<string>('0x41');
-  const [operandBStr, setOperandBStr] = useState<string>('0x20');
+  const [operandAStr, setOperandAStr] = useState<string>('0');
+  const [operandBStr, setOperandBStr] = useState<string>('0');
   const [opWidth, setOpWidth] = useState<8 | 16 | 32>(8);
 
   // Repeating XOR State
-  const [xorDataInput, setXorDataInput] = useState<string>('41 42 43 44');
-  const [xorKeyInput, setXorKeyInput] = useState<string>('20');
+  const [xorDataInput, setXorDataInput] = useState<string>('');
+  const [xorKeyInput, setXorKeyInput] = useState<string>('');
   const [xorKeyType, setXorKeyType] = useState<'hex' | 'text' | 'dec'>('hex');
   const [xorDataType, setXorDataType] = useState<'hex' | 'text' | 'auto'>('hex');
 
   // Single-byte Brute Force State
-  const [bruteForceInput, setBruteForceInput] = useState<string>('1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736');
+  const [bruteForceInput, setBruteForceInput] = useState<string>('');
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -71,13 +70,13 @@ export default function BitwiseLab({ onLogHistory, onSend, loadRequest, resetId 
   });
 
   useWorkbenchReset(resetId, () => {
-    setXorDataInput('41 42 43 44');
-    setXorKeyInput('20');
+    setXorDataInput('');
+    setXorKeyInput('');
     setXorDataType('hex');
     setXorKeyType('hex');
-    setBruteForceInput('1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736');
-    setOperandAStr('0x41');
-    setOperandBStr('0x20');
+    setBruteForceInput('');
+    setOperandAStr('0');
+    setOperandBStr('0');
   });
 
   // Helper parse BigInt from string
@@ -120,22 +119,6 @@ export default function BitwiseLab({ onLogHistory, onSend, loadRequest, resetId 
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2000);
-  };
-
-  const loadExampleXor = () => {
-    setXorDataType('hex');
-    setXorDataInput('41 42 43 44');
-    setXorKeyType('hex');
-    setXorKeyInput('20');
-    onLogHistory({
-      tool: 'Bitwise Operations',
-      operation: 'Load Spec Example: 41424344 ^ 20',
-      inputSummary: '41 42 43 44',
-      params: 'Key: 0x20',
-      resultSummary: '61 62 63 64 ("abcd")',
-      restoreTab: 'bitwise-lab',
-      restore: { subtab: 'repeating-xor', data: '41 42 43 44', key: '20' },
-    });
   };
 
   const bitwiseParcel: ToolParcel = activeSubTab === 'single-key-bruteforce'
@@ -196,13 +179,6 @@ export default function BitwiseLab({ onLogHistory, onSend, loadRequest, resetId 
                   REPEATING-KEY XOR LAB
                 </h2>
               </div>
-              <button
-                onClick={loadExampleXor}
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded bg-[#101726] hover:bg-[#18233a] border border-cyan-500/30 text-cyan-300 text-xs font-mono"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Load Spec Example ("41424344" ^ "20")</span>
-              </button>
             </div>
 
             {/* Inputs Grid */}
@@ -230,7 +206,7 @@ export default function BitwiseLab({ onLogHistory, onSend, loadRequest, resetId 
                 <textarea
                   value={xorDataInput}
                   onChange={e => setXorDataInput(e.target.value)}
-                  placeholder="Enter hex bytes (e.g. 41 42 43 44) or text..."
+                  placeholder="Enter bytes in hex or text..."
                   rows={3}
                   className="w-full bg-[#070b14] border border-[#1a2640] rounded-lg p-3 font-mono text-xs sm:text-sm text-cyan-200 outline-none focus:border-cyan-500"
                 />
@@ -259,7 +235,7 @@ export default function BitwiseLab({ onLogHistory, onSend, loadRequest, resetId 
                 <textarea
                   value={xorKeyInput}
                   onChange={e => setXorKeyInput(e.target.value)}
-                  placeholder="Key (e.g. 20 for case toggle, or SECRET, or 0xDEADBEEF)..."
+                  placeholder="Enter the XOR key in hex, decimal, or text..."
                   rows={3}
                   className="w-full bg-[#070b14] border border-[#1a2640] rounded-lg p-3 font-mono text-xs sm:text-sm text-teal-300 outline-none focus:border-teal-500"
                 />

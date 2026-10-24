@@ -15,7 +15,6 @@ import { useWorkbenchLoad, useWorkbenchReset } from './useWorkbenchLoad';
 import {
   Hash,
   Search,
-  Sparkles,
   ShieldAlert,
   ShieldCheck,
   AlertCircle,
@@ -39,7 +38,7 @@ export default function HashDetectivePanel({
   onSend,
   loadRequest,
   resetId = 0,
-  initialHash = '5d41402abc4b2a76b9719d911017c592',
+  initialHash = '',
 }: HashDetectivePanelProps) {
   const [hashInput, setHashInput] = useState<string>(initialHash);
 
@@ -93,18 +92,6 @@ export default function HashDetectivePanel({
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
-  const loadSampleHash = (label: string, sample: string) => {
-    setHashInput(sample);
-    onLogHistory({
-      tool: 'Hash Detective',
-      operation: `Analyze Sample: ${label}`,
-      inputSummary: sample.length > 48 ? sample.slice(0, 48) + '…' : sample,
-      resultSummary: `Identified hash candidates for ${label}`,
-      restoreTab: 'hash-detective',
-      restore: { input: sample },
-    });
-  };
-
   return (
     <div className="space-y-6">
       {onSend && <SendToBar from="hash-detective" parcel={{ hex: '', text: hashInput || generatorText }} onSend={onSend} disabled={!hashInput && !generatorText} />}
@@ -129,7 +116,7 @@ export default function HashDetectivePanel({
             type="text"
             value={hashInput}
             onChange={e => setHashInput(e.target.value)}
-            placeholder="Paste any hash (e.g. 5d41402abc4b2a76b9719d911017c592, $2a$10$..., SHA-256, NTLM)..."
+            placeholder="Paste a hash to inspect its likely algorithm..."
             className="w-full bg-[#070b14] border border-[#1a2640] focus:border-teal-500 focus:ring-1 focus:ring-teal-500 rounded-lg px-3.5 py-3 font-mono text-xs sm:text-sm text-teal-200 placeholder:text-slate-600 outline-none pr-20"
           />
           {hashInput && (
@@ -142,84 +129,15 @@ export default function HashDetectivePanel({
           )}
         </div>
 
-        {/* Quick Sample Hashes */}
-        <div className="mt-3 pt-3 border-t border-[#162035] flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-mono text-slate-500 flex items-center space-x-1">
-            <Sparkles className="w-3 h-3 text-teal-400" />
-            <span>Sample Hashes:</span>
-          </span>
-          <button
-            onClick={() => loadSampleHash('MD5 ("hello")', '5d41402abc4b2a76b9719d911017c592')}
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-teal-300"
-          >
-            MD5 (32 hex)
-          </button>
-          <button
-            onClick={() => loadSampleHash('NTLM ("Password123")', 'cd3707204b407b48325a2cf6c632616f')}
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-teal-300"
-          >
-            NTLM
-          </button>
-          <button
-            onClick={() =>
-              loadSampleHash(
-                'SHA-256 ("hello")',
-                '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824'
-              )
-            }
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-teal-300"
-          >
-            SHA-256 (64 hex)
-          </button>
-          <button
-            onClick={() =>
-              loadSampleHash(
-                'SHA-1 ("hello")',
-                'aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d'
-              )
-            }
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-teal-300"
-          >
-            SHA-1 (40 hex)
-          </button>
-          <button
-            onClick={() =>
-              loadSampleHash(
-                'Bcrypt',
-                '$2a$12$R9h/cIPz0gi.URNNX3kh2OPST9/PgBkqquzi.Ss7KIUgO2t0jWMUW'
-              )
-            }
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-teal-300"
-          >
-            bcrypt ($2a$...)
-          </button>
-          <button
-            onClick={() =>
-              loadSampleHash(
-                'Argon2id',
-                '$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$RdescudvJCsgqlfreSAHgQ'
-              )
-            }
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-teal-300"
-          >
-            Argon2id
-          </button>
-          <button
-            onClick={() => loadSampleHash('CRC-32', '3610A686')}
-            className="px-2 py-0.5 rounded text-[11px] font-mono bg-[#101726] hover:bg-[#18233a] border border-[#202d4a] text-teal-300"
-          >
-            CRC-32 (8 hex)
-          </button>
-        </div>
       </div>
 
       {/* Primary Detection & Likelihood Section */}
-      {detection.primaryMatch ? (
+      {detection.primaryMatch && hashInput.trim() ? (
         <div className="bg-[#0c1424] border border-teal-500/40 rounded-xl p-5 shadow-neon-teal">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-[#1b2946] pb-4 mb-4">
             <div>
               <div className="flex items-center space-x-3 mb-1">
-                <span className="text-xl sm:text-2xl font-bold font-cyber text-teal-300 glow-text-teal">
+                <span className="text-xl sm:text-2xl font-bold font-cyber text-teal-300">
                   {detection.primaryMatch.name}
                 </span>
                 <span
@@ -253,7 +171,7 @@ export default function HashDetectivePanel({
               {/* Animated Progress Bar */}
               <div className="w-full bg-[#121a2d] h-3 rounded-full overflow-hidden p-0.5 border border-[#1f2e4d]">
                 <div
-                  className="bg-gradient-to-r from-teal-500 via-cyan-400 to-emerald-400 h-full rounded-full transition-all duration-500"
+                  className="bg-teal-500 h-full rounded-full transition-all duration-500"
                   style={{ width: `${detection.primaryMatch.confidence}%` }}
                 />
               </div>
@@ -292,11 +210,11 @@ export default function HashDetectivePanel({
             </div>
           </div>
         </div>
-      ) : (
+      ) : hashInput.trim() ? (
         <div className="p-6 text-center border border-dashed border-[#1a253e] rounded-xl bg-[#080c14] text-slate-400 font-mono text-xs">
-          Enter a hash above to identify algorithm, likelihood scores, and security ratings.
+          No matching hash format was identified.
         </div>
-      )}
+      ) : null}
 
       {/* Alternate Possibilities & Percentage Scroll Bar */}
       {detection.candidates.length > 1 && (
@@ -349,9 +267,9 @@ export default function HashDetectivePanel({
                   <div
                     className={`h-full rounded-full transition-all duration-300 ${
                       idx === 0
-                        ? 'bg-gradient-to-r from-teal-400 to-cyan-400'
+                        ? 'bg-teal-400'
                         : idx === 1
-                        ? 'bg-gradient-to-r from-teal-500 to-emerald-500'
+                        ? 'bg-teal-500'
                         : 'bg-slate-500'
                     }`}
                     style={{ width: `${cand.confidence}%` }}

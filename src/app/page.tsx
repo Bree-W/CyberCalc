@@ -13,7 +13,6 @@ import NetworkingLab from '@/components/NetworkingLab';
 import StandardCalculator from '@/components/StandardCalculator';
 import FatalShutdownModal from '@/components/FatalShutdownModal';
 import TraceHistoryModal from '@/components/TraceHistoryModal';
-import QuickSamplesModal from '@/components/QuickSamplesModal';
 import IntegrationsPanel from '@/components/IntegrationsPanel';
 import { buildCyberChefUrl, chefWindowPath } from '@/integrations/index.ts';
 import AttributionDrawer from '@/components/AttributionDrawer';
@@ -27,7 +26,6 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('byte-detective');
   const [history, setHistory] = useState<TraceHistoryItem[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
-  const [isSamplesOpen, setIsSamplesOpen] = useState<boolean>(false);
   const [isNoticesOpen, setIsNoticesOpen] = useState<boolean>(false);
 
   // Easter Egg State
@@ -63,19 +61,6 @@ export default function Home() {
   const handleResetWorkbench = () => {
     setResetId(id => id + 1);
     showToast('Workbench inputs reset');
-  };
-
-  const handleSelectSample = (tab: ActiveTab, sampleData: string) => {
-    if (tab === 'bitwise-lab') {
-      pushLoad(tab, { subtab: 'repeating-xor', data: sampleData, key: '20' });
-    } else if (tab === 'reverse-eng') {
-      pushLoad(tab, { subtab: 'endianness', input: sampleData });
-    } else if (tab === 'hash-detective') {
-      pushLoad(tab, { input: sampleData });
-    } else {
-      pushLoad(tab, { input: sampleData, format: 'hex' });
-    }
-    showToast(`Loaded sample into ${tab}`);
   };
 
   const deliver = (target: SendTarget, parcel: ToolParcel) => {
@@ -153,7 +138,6 @@ export default function Home() {
       {/* Top Header */}
       <Header
         onOpenHistory={() => setIsHistoryOpen(true)}
-        onOpenSamples={() => setIsSamplesOpen(true)}
         onOpenNotices={() => setIsNoticesOpen(true)}
         onReset={handleResetWorkbench}
         historyCount={history.length}
@@ -166,7 +150,7 @@ export default function Home() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Toast Alert */}
         {toastMessage && (
-          <div className="fixed bottom-6 right-6 z-50 bg-[#0e172a] border border-cyan-500/50 text-cyan-300 px-4 py-2.5 rounded-lg shadow-neon-cyan font-mono text-xs flex items-center space-x-2 animate-bounce">
+          <div className="fixed bottom-6 right-6 z-50 bg-[#0e172a] border border-cyan-500/50 text-cyan-300 px-4 py-2.5 rounded-lg shadow-neon-cyan font-mono text-xs flex items-center space-x-2">
             <Check className="w-4 h-4 text-emerald-400" />
             <span>{toastMessage}</span>
           </div>
@@ -259,13 +243,6 @@ export default function Home() {
           showToast('This entry has no stored input to reload');
         }}
       />
-
-      <QuickSamplesModal
-        isOpen={isSamplesOpen}
-        onClose={() => setIsSamplesOpen(false)}
-        onSelectSample={handleSelectSample}
-      />
-
       <AttributionDrawer isOpen={isNoticesOpen} onClose={() => setIsNoticesOpen(false)} />
     </div>
   );

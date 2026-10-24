@@ -6,146 +6,175 @@ export interface CalcEvalResult {
   error?: string;
 }
 
+class CalculationError extends Error {
+  constructor(message: string, readonly isDivisionByZero = false) {
+    super(message);
+  }
+}
+
+const constants: Record<string, number> = {
+  e: Math.E,
+  pi: Math.PI,
+};
+
+const functions: Record<string, (value: number) => number> = {
+  abs: Math.abs,
+  cos: Math.cos,
+  exp: Math.exp,
+  ln: Math.log,
+  log: Math.log10,
+  sin: Math.sin,
+  sqrt: Math.sqrt,
+  tan: Math.tan,
+};
+
 export function evaluateExpression(expr: string): CalcEvalResult {
   const sanitized = expr
     .replace(/×/g, '*')
     .replace(/÷/g, '/')
-    .replace(/\s+/g, '');
+    .replace(/π/g, 'pi')
+    .replace(/\s+/g, '')
+    .toLowerCase();
 
   if (!sanitized) {
     return { success: true, result: 0, displayResult: '0', isDivisionByZero: false };
   }
 
-  // Tokenize
   const tokens: string[] = [];
-  let i = 0;
-  while (i < sanitized.length) {
-    const ch = sanitized[i];
+  let index = 0;
 
-    if ('+-*/()%'.includes(ch)) {
-      // Check for unary minus: at start or right after '(' or an operator
-      if (ch === '-' && (i === 0 || '+-*/('.includes(sanitized[i - 1]))) {
-        let numStr = '-';
-        i++;
-        while (i < sanitized.length && /[0-9.]/.test(sanitized[i])) {
-          numStr += sanitized[i];
-          i++;
-        }
-        if (numStr === '-') {
-          return { success: false, isDivisionByZero: false, error: 'Malformed expression' };
-        }
-        tokens.push(numStr);
-        continue;
-      }
-      tokens.push(ch);
-      i++;
-    } else if (/[0-9.]/.test(ch)) {
-      let numStr = '';
-      while (i < sanitized.length && /[0-9.]/.test(sanitized[i])) {
-        numStr += sanitized[i];
-        i++;
-      }
-      tokens.push(numStr);
+  while (index < sanitized.length) {
+    const remaining = sanitized.slice(index);
+    const numberMatch = /^(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/.exec(remaining);
+    const identifierMatch = /^[a-z]+/.exec(remaining);
+
+    if (numberMatch) {
+      tokens.push(numberMatch[0]);
+      index += numberMatch[0].length;
+    } else if (identifierMatch) {
+      tokens.push(identifierMatch[0]);
+      index += identifierMatch[0].length;
+    } else if ('+-*/%^()'.includes(sanitized[index])) {
+      tokens.push(sanitized[index]);
+      index++;
     } else {
-      return { success: false, isDivisionByZero: false, error: `Invalid character: ${ch}` };
+      return {
+        success: false,
+        isDivisionByZero: false,
+        error: `Invalid character: ${sanitized[index]}`,
+      };
     }
   }
 
-  // Parse using Shunting-Yard to Reverse Polish Notation (RPN)
-  const outputQueue: string[] = [];
-  const opStack: string[] = [];
-
-  const precedence: Record<string, number> = {
-    '+': 1,
-    '-': 1,
-    '*': 2,
-    '/': 2,
-    '%': 2,
+  let position = 0;
+  const peek = () => tokens[position];
+  const take = () => tokens[position++];
+  const expect = (token: string) => {
+    if (take() !== token) {
+      throw new CalculationError(`Expected "${token}"`);
+    }
   };
 
-  for (const token of tokens) {
-    if (!isNaN(Number(token))) {
-      outputQueue.push(token);
-    } else if (token in precedence) {
-      while (
-        opStack.length > 0 &&
-        opStack[opStack.length - 1] in precedence &&
-        precedence[opStack[opStack.length - 1]] >= precedence[token]
-      ) {
-        outputQueue.push(opStack.pop()!);
-      }
-      opStack.push(token);
-    } else if (token === '(') {
-      opStack.push(token);
-    } else if (token === ')') {
-      while (opStack.length > 0 && opStack[opStack.length - 1] !== '(') {
-        outputQueue.push(opStack.pop()!);
-      }
-      if (opStack.length === 0) {
-        return { success: false, isDivisionByZero: false, error: 'Mismatched parentheses' };
-      }
-      opStack.pop(); // discard '('
+  const parseExpression = (): number => {
+    let value = parseTerm();
+    while (peek() === '+' || peek() === '-') {
+      const operator = take();
+      const right = parseTerm();
+      value = operator === '+' ? value + right : value - right;
     }
-  }
-
-  while (opStack.length > 0) {
-    const op = opStack.pop()!;
-    if (op === '(' || op === ')') {
-      return { success: false, isDivisionByZero: false, error: 'Mismatched parentheses' };
-    }
-    outputQueue.push(op);
-  }
-
-  // Evaluate RPN
-  const evalStack: number[] = [];
-  for (const token of outputQueue) {
-    if (!isNaN(Number(token))) {
-      evalStack.push(Number(token));
-    } else {
-      const b = evalStack.pop();
-      const a = evalStack.pop();
-      if (a === undefined || b === undefined) {
-        return { success: false, isDivisionByZero: false, error: 'Invalid expression syntax' };
-      }
-
-      if (token === '+') evalStack.push(a + b);
-      else if (token === '-') evalStack.push(a - b);
-      else if (token === '*') evalStack.push(a * b);
-      else if (token === '/') {
-        if (Math.abs(b) < 1e-12) {
-          return {
-            success: false,
-            isDivisionByZero: true,
-            error: 'FATAL ERROR: REALITY DIVISION FAILURE (Division by 0 detected)',
-          };
-        }
-        evalStack.push(a / b);
-      } else if (token === '%') {
-        if (Math.abs(b) < 1e-12) {
-          return {
-            success: false,
-            isDivisionByZero: true,
-            error: 'FATAL ERROR: REALITY DIVISION FAILURE (Modulo by 0 detected)',
-          };
-        }
-        evalStack.push(a % b);
-      }
-    }
-  }
-
-  if (evalStack.length !== 1) {
-    return { success: false, isDivisionByZero: false, error: 'Calculation could not be evaluated' };
-  }
-
-  const result = evalStack[0];
-  const displayResult = Number.isInteger(result)
-    ? result.toString()
-    : Number(result.toFixed(8)).toString();
-
-  return {
-    success: true,
-    result,
-    displayResult,
-    isDivisionByZero: false,
+    return value;
   };
+
+  const parseTerm = (): number => {
+    let value = parseUnary();
+    while (peek() === '*' || peek() === '/' || peek() === '%') {
+      const operator = take();
+      const right = parseUnary();
+      if ((operator === '/' || operator === '%') && right === 0) {
+        throw new CalculationError('Division by zero is undefined.', true);
+      }
+      if (operator === '*') value *= right;
+      else if (operator === '/') value /= right;
+      else value %= right;
+    }
+    return value;
+  };
+
+  const parseUnary = (): number => {
+    if (peek() === '+' || peek() === '-') {
+      const operator = take();
+      const value = parseUnary();
+      return operator === '-' ? -value : value;
+    }
+    return parsePower();
+  };
+
+  const parsePower = (): number => {
+    const value = parsePrimary();
+    if (peek() === '^') {
+      take();
+      return Math.pow(value, parseUnary());
+    }
+    return value;
+  };
+
+  const parsePrimary = (): number => {
+    const token = take();
+    if (token === undefined) {
+      throw new CalculationError('Invalid expression syntax');
+    }
+
+    if (/^(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(token)) {
+      return Number(token);
+    }
+
+    if (token === '(') {
+      const value = parseExpression();
+      expect(')');
+      return value;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(constants, token)) {
+      return constants[token];
+    }
+
+    if (Object.prototype.hasOwnProperty.call(functions, token)) {
+      expect('(');
+      const argument = parseExpression();
+      expect(')');
+      return functions[token](argument);
+    }
+
+    throw new CalculationError(`Unexpected token: ${token}`);
+  };
+
+  try {
+    const result = parseExpression();
+    if (position !== tokens.length) {
+      throw new CalculationError(`Unexpected token: ${peek()}`);
+    }
+    if (!Number.isFinite(result)) {
+      throw new CalculationError('Result is outside the supported numeric range.');
+    }
+
+    const displayResult = Number.isInteger(result)
+      ? result.toString()
+      : Number(result.toFixed(8)).toString();
+
+    return {
+      success: true,
+      result,
+      displayResult,
+      isDivisionByZero: false,
+    };
+  } catch (error) {
+    if (error instanceof CalculationError) {
+      return {
+        success: false,
+        isDivisionByZero: error.isDivisionByZero,
+        error: error.message,
+      };
+    }
+    throw error;
+  }
 }

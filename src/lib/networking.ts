@@ -16,6 +16,8 @@ export interface SubnetResult {
   lastUsableHost: string;
   totalAddresses: number;
   usableHosts: number;
+  parentPrefix: number;
+  subnetCount: number;
   ipClass: 'A' | 'B' | 'C' | 'D' | 'E';
   scope: string;
   isPrivate: boolean;
@@ -61,9 +63,18 @@ export function numberToIpv4(num: number): string {
   return `${(n >>> 24) & 255}.${(n >>> 16) & 255}.${(n >>> 8) & 255}.${n & 255}`;
 }
 
-export function calculateSubnet(ipInput: string, prefixInput: number | string = 24): SubnetResult | { error: string } {
+export function calculateSubnet(
+  ipInput: string,
+  prefixInput: number | string = 24,
+  parentPrefixInput?: number | string,
+): SubnetResult | { error: string } {
   let ipStr = ipInput.trim();
   let prefix = typeof prefixInput === 'number' ? prefixInput : parseInt(prefixInput.toString(), 10);
+  let parentPrefix = parentPrefixInput === undefined
+    ? prefix
+    : typeof parentPrefixInput === 'number'
+      ? parentPrefixInput
+      : parseInt(parentPrefixInput.toString(), 10);
 
   // Check if input contains CIDR slash e.g. "192.168.1.50/24"
   if (ipStr.includes('/')) {
@@ -77,8 +88,14 @@ export function calculateSubnet(ipInput: string, prefixInput: number | string = 
     return { error: `Invalid IPv4 address format "${ipInput}". Expected dotted quad like 192.168.1.1` };
   }
 
-  if (isNaN(prefix) || prefix < 0 || prefix > 32) {
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > 32) {
     return { error: `Invalid CIDR prefix /${prefix}. Expected an integer between 0 and 32.` };
+  }
+
+  if (!Number.isInteger(parentPrefix) || parentPrefix < 0 || parentPrefix > prefix) {
+    return {
+      error: `Invalid parent prefix /${parentPrefix}. It must be an integer between 0 and the subnet prefix /${prefix}.`,
+    };
   }
 
   // Calculate subnet mask
@@ -177,6 +194,8 @@ export function calculateSubnet(ipInput: string, prefixInput: number | string = 
     lastUsableHost,
     totalAddresses,
     usableHosts,
+    parentPrefix,
+    subnetCount: Math.pow(2, prefix - parentPrefix),
     ipClass,
     scope,
     isPrivate,
@@ -277,16 +296,25 @@ function ipv6Scope(first: number, expanded: string): string {
   return 'Reserved / other';
 }
 
-// IPv6 expansion and RFC 5952 compression.
-export function analyzeIpv6(ipv6Str: string): {
+// IPv6 expansion, RFC 5952 compression, and prefix range calculations.
+export function analyzeIpv6(ipv6Str: string, prefixInput: number | string = 64): {
   isValid: boolean;
   expanded?: string;
   compressed?: string;
   scope?: string;
+  prefix?: number;
+  networkAddress?: string;
+  firstAddress?: string;
+  lastAddress?: string;
+  totalAddresses?: bigint;
   error?: string;
 } {
   let trimmed = ipv6Str.trim().toLowerCase();
   if (!trimmed) return { isValid: false, error: 'Empty IPv6 string.' };
+  const prefix = typeof prefixInput === 'number' ? prefixInput : parseInt(prefixInput.toString(), 10);
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > 128) {
+    return { isValid: false, error: `Invalid IPv6 prefix /${prefix}. Expected an integer between 0 and 128.` };
+  }
 
   const v4 = trimmed.match(/(?:^|:)((?:\d{1,3}\.){3}\d{1,3})$/);
   if (v4) {
@@ -324,11 +352,27 @@ export function analyzeIpv6(ipv6Str: string): {
   const padded = parts.map(part => part.padStart(4, '0'));
   const expanded = padded.join(':');
   const first = parseInt(padded[0], 16);
+  const address = BigInt(`0x${padded.join('')}`);
+  const hostBits = BigInt(128 - prefix);
+  const totalAddresses = 1n << hostBits;
+  const networkAddress = (address >> hostBits) << hostBits;
+  const lastAddress = networkAddress + totalAddresses - 1n;
+  const toIpv6 = (value: bigint) =>
+    compressIpv6Hextets(
+      Array.from({ length: 8 }, (_, index) =>
+        ((value >> BigInt((7 - index) * 16)) & 0xffffn).toString(16).padStart(4, '0'),
+      ),
+    );
 
   return {
     isValid: true,
     expanded,
     compressed: compressIpv6Hextets(padded),
     scope: ipv6Scope(first, expanded),
+    prefix,
+    networkAddress: toIpv6(networkAddress),
+    firstAddress: toIpv6(networkAddress),
+    lastAddress: toIpv6(lastAddress),
+    totalAddresses,
   };
 }

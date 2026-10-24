@@ -37,12 +37,14 @@ export default function NetworkingLab({ onLogHistory, onSend, loadRequest, reset
   // IPv4 State
   const [ipInput, setIpInput] = useState<string>('192.168.1.100');
   const [cidrPrefix, setCidrPrefix] = useState<number>(24);
+  const [parentPrefix, setParentPrefix] = useState<number>(16);
 
   // TCP Flags State
   const [flagByte, setFlagByte] = useState<number>(0x02); // default SYN
 
   // IPv6 State
   const [ipv6Input, setIpv6Input] = useState<string>('2001:db8::1');
+  const [ipv6Prefix, setIpv6Prefix] = useState<number>(64);
 
   useWorkbenchLoad(loadRequest, 'networking', payload => {
     if (payload.subtab === 'ipv4-cidr' || payload.subtab === 'tcp-flags' || payload.subtab === 'ipv6') {
@@ -72,8 +74,8 @@ export default function NetworkingLab({ onLogHistory, onSend, loadRequest, reset
 
   // Subnet Result
   const subnetResult = React.useMemo(() => {
-    return calculateSubnet(ipInput, cidrPrefix);
-  }, [ipInput, cidrPrefix]);
+    return calculateSubnet(ipInput, cidrPrefix, parentPrefix);
+  }, [ipInput, cidrPrefix, parentPrefix]);
 
   // TCP Flags Result
   const tcpFlagsResult: TcpFlagsDecoded = React.useMemo(() => {
@@ -82,8 +84,8 @@ export default function NetworkingLab({ onLogHistory, onSend, loadRequest, reset
 
   // IPv6 Result
   const ipv6Result = React.useMemo(() => {
-    return analyzeIpv6(ipv6Input);
-  }, [ipv6Input]);
+    return analyzeIpv6(ipv6Input, ipv6Prefix);
+  }, [ipv6Input, ipv6Prefix]);
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -180,7 +182,18 @@ export default function NetworkingLab({ onLogHistory, onSend, loadRequest, reset
                 <input
                   type="text"
                   value={ipInput}
-                  onChange={e => setIpInput(e.target.value)}
+                  onChange={e => {
+                    const nextInput = e.target.value;
+                    setIpInput(nextInput);
+                    const cidrMatch = /\/(\d{1,2})$/.exec(nextInput.trim());
+                    if (cidrMatch) {
+                      const nextPrefix = Number(cidrMatch[1]);
+                      if (nextPrefix <= 32) {
+                        setCidrPrefix(nextPrefix);
+                        setParentPrefix(current => Math.min(current, nextPrefix));
+                      }
+                    }
+                  }}
                   placeholder="192.168.1.100"
                   className="w-full bg-[#070b14] border border-[#1a2640] rounded-lg px-4 py-2.5 font-mono text-sm text-cyan-300 outline-none focus:border-cyan-500"
                 />
@@ -197,7 +210,11 @@ export default function NetworkingLab({ onLogHistory, onSend, loadRequest, reset
                   min="0"
                   max="32"
                   value={cidrPrefix}
-                  onChange={e => setCidrPrefix(Number(e.target.value))}
+                  onChange={e => {
+                    const nextPrefix = Number(e.target.value);
+                    setCidrPrefix(nextPrefix);
+                    setParentPrefix(current => Math.min(current, nextPrefix));
+                  }}
                   className="w-full accent-cyan-400 cursor-pointer"
                 />
                 <div className="flex justify-between text-[10px] font-mono text-slate-500">
@@ -205,6 +222,32 @@ export default function NetworkingLab({ onLogHistory, onSend, loadRequest, reset
                   <span>/24 (Class C)</span>
                   <span>/32 (Host)</span>
                 </div>
+              </div>
+
+              <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-[#18233a] pt-4">
+                <label className="space-y-1.5">
+                  <span className="block text-xs font-mono text-slate-400">
+                    Parent network prefix (contains this subnet):
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-500 font-mono">/</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max={cidrPrefix}
+                      value={parentPrefix}
+                      onChange={e => setParentPrefix(Number(e.target.value))}
+                      aria-label="Parent network CIDR prefix"
+                      className="w-full bg-[#070b14] border border-[#1a2640] rounded-lg px-3 py-2 font-mono text-sm text-cyan-300 outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                  <span className="block text-[10px] font-mono text-slate-500">
+                    Counts subnets of /{cidrPrefix} inside the selected parent network.
+                  </span>
+                </label>
+                <p className="self-end text-[11px] font-mono text-slate-500">
+                  Parent prefix must be between /0 and the subnet prefix /{cidrPrefix}.
+                </p>
               </div>
             </div>
           </div>
@@ -300,6 +343,28 @@ export default function NetworkingLab({ onLogHistory, onSend, loadRequest, reset
                   </div>
                 </div>
 
+                <div className="bg-[#0b101c] border border-[#1a253e] rounded-xl p-4">
+                  <div className="text-slate-500 text-[10px] mb-1">
+                    Subnets in Parent /{subnetResult.parentPrefix}
+                  </div>
+                  <div className="text-lg font-bold text-cyan-300">
+                    {subnetResult.subnetCount.toLocaleString()}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-1">
+                    /{subnetResult.cidrPrefix} networks
+                  </div>
+                </div>
+
+                <div className="bg-[#0b101c] border border-[#1a253e] rounded-xl p-4">
+                  <div className="text-slate-500 text-[10px] mb-1">
+                    Usable Host Count
+                  </div>
+                  <div className="text-lg font-bold text-cyan-300">
+                    {subnetResult.usableHosts.toLocaleString()}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-1">assignable host IPs</div>
+                </div>
+
                 {/* Usable Host Range */}
                 <div className="bg-[#0b101c] border border-[#1a253e] rounded-xl p-4 md:col-span-2">
                   <div className="text-slate-500 text-[10px] mb-1">
@@ -311,8 +376,7 @@ export default function NetworkingLab({ onLogHistory, onSend, loadRequest, reset
                     <span className="text-cyan-300">{subnetResult.lastUsableHost}</span>
                   </div>
                   <div className="text-[11px] text-slate-500 mt-1">
-                    {subnetResult.usableHosts.toLocaleString()} assignable host IPs
-                    (Total: {subnetResult.totalAddresses.toLocaleString()})
+                    {subnetResult.totalAddresses.toLocaleString()} total addresses
                   </div>
                 </div>
 
@@ -495,17 +559,34 @@ export default function NetworkingLab({ onLogHistory, onSend, loadRequest, reset
               <span>IPV6 ADDRESS DECOMPRESSION &amp; SCOPE ANALYZER</span>
             </h2>
 
-            <div className="space-y-2">
-              <label className="text-xs font-mono text-slate-400">
-                IPv6 Address (Compressed or Expanded):
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <label className="sm:col-span-2 space-y-2">
+                <span className="block text-xs font-mono text-slate-400">
+                  IPv6 Address (Compressed or Expanded):
+                </span>
+                <input
+                  type="text"
+                  value={ipv6Input}
+                  onChange={e => setIpv6Input(e.target.value)}
+                  placeholder="Enter an IPv6 address"
+                  className="w-full bg-[#070b14] border border-[#1a2640] rounded-lg px-4 py-2.5 font-mono text-sm text-cyan-300 outline-none focus:border-cyan-500"
+                />
               </label>
-              <input
-                type="text"
-                value={ipv6Input}
-                onChange={e => setIpv6Input(e.target.value)}
-                placeholder="2001:db8::1 or fe80::1"
-                className="w-full bg-[#070b14] border border-[#1a2640] rounded-lg px-4 py-2.5 font-mono text-sm text-cyan-300 outline-none focus:border-cyan-500"
-              />
+              <label className="space-y-2">
+                <span className="block text-xs font-mono text-slate-400">Prefix length:</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-500 font-mono">/</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="128"
+                    value={ipv6Prefix}
+                    onChange={e => setIpv6Prefix(Number(e.target.value))}
+                    aria-label="IPv6 prefix length"
+                    className="w-full bg-[#070b14] border border-[#1a2640] rounded-lg px-3 py-2.5 font-mono text-sm text-cyan-300 outline-none focus:border-cyan-500"
+                  />
+                </div>
+              </label>
             </div>
           </div>
 
@@ -535,6 +616,26 @@ export default function NetworkingLab({ onLogHistory, onSend, loadRequest, reset
                 </div>
                 <div className="text-sm font-bold text-emerald-400">
                   {ipv6Result.scope}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3 bg-[#080d17] rounded-lg border border-[#18243c]">
+                  <div className="text-slate-500 text-[10px] mb-1">Network Address /{ipv6Result.prefix}</div>
+                  <div className="text-sm font-bold text-cyan-300 break-all">{ipv6Result.networkAddress}</div>
+                </div>
+                <div className="p-3 bg-[#080d17] rounded-lg border border-[#18243c]">
+                  <div className="text-slate-500 text-[10px] mb-1">First - Last Address (inclusive)</div>
+                  <div className="text-sm font-bold text-teal-300 break-all">
+                    {ipv6Result.firstAddress} - {ipv6Result.lastAddress}
+                  </div>
+                </div>
+                <div className="p-3 bg-[#080d17] rounded-lg border border-[#18243c]">
+                  <div className="text-slate-500 text-[10px] mb-1">Total Addresses</div>
+                  <div className="text-sm font-bold text-slate-100">
+                    {ipv6Result.totalAddresses?.toLocaleString()}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1">IPv6 has no broadcast address.</div>
                 </div>
               </div>
             </div>
